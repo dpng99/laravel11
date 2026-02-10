@@ -1,0 +1,233 @@
+body {
+    background-color: #f8f9fa;
+    display: flex;
+    min-height: 100vh;
+    flex-direction: column;
+    margin: 0;
+    
+}
+.container {
+    flex: 1;
+}
+.sidebar {
+    height: 100vh;
+    width: 250px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    background-color: #fcfdfd;
+    overflow-y: auto;
+    transition: width 0.3s;
+}
+.sidebar.minimized {
+    width: 80px;
+}
+.sidebar a {
+    color: rgb(33, 32, 32);
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.sidebar.minimized a {
+    justify-content: center;
+}
+.sidebar a i {
+    margin-right: 10px;
+}
+.sidebar.minimized a i {
+    margin-right: 0;
+}
+.sidebar a:hover {
+    background-color: #f1ef4e;
+}
+.profile-pic {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0 auto 20px auto;
+    background-position: center center;
+    display: block;
+    transition: width 0.3s, height 0.3s;
+}
+
+.sidebar.minimized .profile-pic {
+    width: 40px;
+    height: 40px;
+}
+
+.sidebar h4 {
+    text-align: center;
+}
+.sidebar.minimized h4, .sidebar.minimized .sidebar-text {
+    display: none;
+}
+.content {
+    margin-left: 250px;
+    padding: 20px;
+    transition: margin-left 0.3s;
+}
+.content.shrink {
+    margin-left: 80px;
+}
+.navbar {
+    margin-left: 250px;
+    transition: margin-left 0.3s;
+}
+.navbar.shrink {
+    margin-left: 80px;
+}
+.submenu {
+    display: none;
+    padding-left: 20px;
+}
+.submenu a {
+    padding: 10px 15px;
+    display: block;
+}
+.toggler-btn {
+    position: fixed;
+    top: 10px;
+    left: 250px;
+    transition: left 0.3s;
+    z-index: 1000;
+}
+.toggler-btn.shrink {
+    left: 80px;
+}
+.arrow-icon {
+    margin-left: auto;
+    transition: transform 0.3s;
+}
+.submenu-open .arrow-icon {
+    transform: rotate(90deg);
+}
+.sidebar.minimized .arrow-icon {
+    display: none;
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 200px;
+    }
+    .sidebar.minimized {
+        width: 60px;
+    }
+    .content {
+        margin-left: 200px;
+    }
+    .content.shrink {
+        margin-left: 60px;
+    }
+    .toggler-btn {
+        left: 200px;
+    }
+    .toggler-btn.shrink {
+        left: 60px;
+    }
+}
+
+@media (max-width: 576px) {
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+    }
+    .content {
+        margin-left: 0;
+    }
+    .navbar {
+        margin-left: 0;
+    }
+    .toggler-btn {
+        display: none;
+    }
+}
+
+.btn-custom-yellow {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: #212529;
+}
+
+.btn-custom-yellow:hover {
+    background-color: #e0a800;
+    border-color: #d39e00;
+}
+
+/* Custom CSS for File Input and Button */
+#upload-form {
+    text-align: center; /* Center align content within the form */
+}
+
+#upload-form .form-control-sm {
+    display: inline-block;
+    width: 50%; /* Adjust width as needed */
+    max-width: 300px; /* Optional: max-width for larger screens */
+    margin-bottom: 15px; /* Space between file input and button */
+}
+
+#upload-form .btn-primary {
+    display: inline-block;
+}
+
+footer {
+    background-color: #f8f9fa;
+    padding: 10px 0;
+    position: relative;
+    bottom: 0;
+    width: 100%;
+    text-align: center;
+}
+/* Custom Button Styles */
+.btn-yellow {
+    background-color: #f0bb49; /* Warna kuning */
+    color: #fff; /* Warna teks putih */
+    border: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.btn-yellow:hover {
+    background-color: #e0a842; /* Warna kuning yang sedikit lebih gelap untuk efek hover */
+}
+
+.btn-yellow:focus {
+    outline: none;
+    box-shadow: 0 0 5px rgba(240, 187, 73, 0.8);
+}
+
+/* CSS untuk button merah */
+.btn-red {
+    background-color: #ff0000;  /* Warna merah */
+    color: white;               /* Warna teks putih */
+    border: none;               /* Tanpa border */
+    padding: 10px 20px;         /* Padding di dalam button */
+    border-radius: 5px;         /* Sudut rounded */
+    font-size: 16px;            /* Ukuran font */
+    cursor: pointer;            /* Mengubah kursor saat hover */
+    transition: background-color 0.3s ease; /* Efek transisi */
+}
+
+/* Efek hover */
+.btn-red:hover {
+    background-color: #cc0000;  /* Warna merah lebih gelap saat hover */
+}
+
+/* Efek fokus */
+.btn-red:focus {
+    outline: none;              /* Menghilangkan outline default */
+    box-shadow: 0 0 5px #ff0000; /* Tambahkan bayangan saat fokus */
+}
+.table-hover tbody tr:hover {
+    background-color: #ffe6b3; /* Warna kuning muda saat hover */
+}
+.table-hover tbody tr:hover {
+    background-color: #ffe6b3; /* Warna kuning muda saat hover */
+}

@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/* resources/css/app.css */
+.btn-warning.login-button {
+  background-color: #f0bb49;
+  border-color: #f0bb49;
+  color: #fff !important; /* Pastikan teks putih */
+}
+
+.btn-warning.login-button:hover {
+   background-color: #e0a842;
+   border-color: #e0a842;
+}
+
+.login-title {
+    font-size: 24px;
+    font-weight: bold;
+}
