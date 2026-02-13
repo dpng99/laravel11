@@ -12,7 +12,6 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.9",
         "lcobucci/jwt": "^4.0",
-        "maatwebsite/excel": "^1.1",
         "predis/predis": "^3.0",
         "tightenco/ziggy": "^2.0",
         "yaza/laravel-google-drive-storage": "^4.1"

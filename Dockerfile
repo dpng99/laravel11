@@ -1,34 +1,39 @@
-FROM php:8.2-fpm
+FROM php:8.4-fpm
 
-# Arguments defined in docker-compose.yml
-ARG user
-ARG uid
+## Daffa Sukaphorn Pukhirapat was here ##
 
-# Install system dependencies
+# 1. Install Dependencies System (Termasuk git & unzip yg wajib untuk Composer)
 RUN apt-get update && apt-get install -y \
     git \
     curl \
+    unzip \
+    zip \
+    libicu-dev \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
-    zip \
-    unzip
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
 
-# Clear cache
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+# 2. Install PHP Extensions
+RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd mysqli intl
 
-# Install PHP extensions
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
-
-# Get latest Composer
+# 3. --- BAGIAN PENTING: INSTALL COMPOSER ---
+# Kita menyalin Composer dari image resminya langsung
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Create system user to run Composer and Artisan Commands
-RUN useradd -G www-data,root -u $uid -d /home/$user $user
-RUN mkdir -p /home/$user/.composer && \
-    chown -R $user:$user /home/$user
-ARG WWWGROUP=1000
-ARG WWWUSER=1000
-WORKDIR /var/www
+# 4. Set Work Directory
+WORKDIR /var/www/html
 
-USER $user
+# 5. Copy file project
+COPY . .
+
+# 6. Set permission folder agar bisa diedit
+RUN chown -R www-data:www-data /var/www/html
+
+# 7. Expose Port
+EXPOSE 9000
+
+# 8. Jalankan PHP-FPM
+CMD ["php-fpm"]

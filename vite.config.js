@@ -10,4 +10,15 @@ export default defineConfig({
         }),
         react(),
     ],
+    server: {
+        host: '0.0.0.0',
+        cors: true,      // Agar server bisa diakses dari luar container (Wajib untuk Docker)
+        port: 5173,           // Port default Vite
+        hmr: {
+            host: 'localhost', // Memaksa browser konek ke 'localhost' (IPv4), BUKAN '[::]' (IPv6)
+        },
+        watch: {
+            usePolling: true, // Wajib agar perubahan file terdeteksi di Windows
+        },
+    },
 });
