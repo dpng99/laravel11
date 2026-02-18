@@ -204,6 +204,20 @@ Route::middleware(['auth'])->group(function () {
 
 
 Route::get('/upload-drive', [GoogleDriveController::class, 'upload']);
+Route::get('/debug-google', function () {
+    // Mengambil konfigurasi disk google yang sudah dimuat Laravel
+    $config = config('filesystems.disks.google');
+
+    return [
+        'status' => 'Cek Konfigurasi',
+        'clientId_terisi' => !empty($config['clientId']), // Harusnya TRUE
+        'clientSecret_terisi' => !empty($config['clientSecret']), // Harusnya TRUE
+        'refreshToken_terisi' => !empty($config['refreshToken']), // Harusnya TRUE
+        
+        // Tampilkan config mentah untuk memastikan key-nya benar (clientId bukan client_id)
+        'config_raw' => $config, 
+    ];
+});
 
 
 });

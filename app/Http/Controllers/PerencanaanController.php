@@ -21,6 +21,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\File;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Storage;
 class PerencanaanController extends Controller
 {
     public function index()
@@ -75,251 +76,353 @@ $satkernama = session('satkernama');
         return Inertia::render('Kelola/Perencanaan', ['renstra' => $renstra, 'iku' => $iku, 'renja' => $renja, 'tahun' => $tahun, 'rkakl' => $rkakl, 'dipa' => $dipa, 'renaksi' => $renaksi, 'indikator' => $indikator, 'target' => $target, 'bidang' => $bidang, 'pk' => $pk]);
     }
 
-    // Fungsi untuk menangani upload file Renstra
-    public function uploadRenstra(Request $request)
-    {
-        $tahun = session('tahun_terpilih');
-        // Validasi file
-        $request->validate([
-            'renstra_file' => 'required|mimes:pdf|max:2048', // maksimal 2MB
-        ]);
 
-        if ($tahun == "2024") {
-            $id_periode = "P1";
-        } elseif ($tahun >= "2025" && $tahun <= "2029") {
-            $id_periode = "P2";
-        }
+public function uploadRenstra(Request $request)
+{
+    // 1. Ambil Session
+    $tahun = session('tahun_terpilih');
+    $idSatker = session('id_satker');
 
-        $idSatker = session('id_satker'); // Ambil id_satker dari session
-
-        // Cek id_perubahan yang sudah ada
-        $latestRenstra = Renstra::where('id_satker', $idSatker)
-            ->where('id_periode', $id_periode)
-            ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
-            ->first();
-
-        // Tentukan id_perubahan
-        $id_perubahan = $latestRenstra ? $latestRenstra->id_perubahan + 1 : 0;
-
-        // Upload file ke folder public/uploads/repository/renstra
-        $file = $request->file('renstra_file');
-        $fileName = 'renstra_' . $tahun . '_'. $id_perubahan .'.pdf'; // Buat nama file
-        $file->move(base_path('uploads/repository/'.$idSatker), $fileName); // Simpan di folder 'renstra' di public
-        // $file->move(base_path('uploads/repository/renstra'), $fileName);
-        // Format tanggal upload ke d/m/y H:i:s
-        $id_tglupload = now()->format('d/m/Y h:i A');
-
-
-        // dd($id_periode);
-        // Simpan data ke database
-        Renstra::create([
-            'id_satker' => $idSatker,
-            'id_periode' => $id_periode, // Sesuaikan dengan data periode 2019 - 2024
-            'id_perubahan' => $id_perubahan, // Simpan id_perubahan yang baru
-            'id_filename' => $fileName,
-            'id_tglupload' => $id_tglupload, // Simpan tanggal upload dengan format yang diinginkan
-        ]);
-
-        //return Redirect::route('perencanaan')->with('success', 'File Renstra berhasil diupload.')->with('active_tab', 'renstra');
-        return Redirect::back()->with('success-renstra', 'File Renstra berhasil disimpan!')->with('active_tab', 'renstra');
+    // Cek Session Safety
+    if (!$tahun || !$idSatker) {
+        return Redirect::back()->withErrors(['msg' => 'Sesi habis, silakan reload halaman.']);
     }
+
+    // 2. Validasi File
+    $request->validate([
+        'renstra_file' => 'required|mimes:pdf|max:10240', // Saya naikkan ke 10MB agar aman
+    ]);
+
+    // 3. Logic Penentuan Periode
+    // Inisialisasi variabel dulu biar tidak "Undefined variable"
+    $id_periode = null; 
+
+    if ($tahun == "2024") {
+        $id_periode = "P1";
+    } elseif ($tahun >= "2025" && $tahun <= "2029") {
+        $id_periode = "P2";
+    } else {
+        // Handle jika tahun diluar range (Opsional)
+        // return back()->with('error', 'Tahun terpilih tidak memiliki periode Renstra.');
+        $id_periode = "Lainnya"; // Atau default value
+    }
+
+    // 4. Logic Versioning (ID Perubahan)
+    $latestRenstra = Renstra::where('id_satker', $idSatker)
+        ->where('id_periode', $id_periode)
+        ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
+        ->first();
+
+    $id_perubahan = $latestRenstra ? intval($latestRenstra->id_perubahan) + 1 : 0;
+
+    // 5. Siapkan Nama File & Path
+    $file = $request->file('renstra_file');
+    
+    // Nama file: renstra_2025_0.pdf
+    $fileName = 'renstra_' . $tahun . '_'. $id_perubahan .'.pdf'; 
+    
+    // Folder di Google Drive: uploads/repository/[ID_SATKER]
+    $folderPath = 'uploads/repository/' . $idSatker;
+
+    // 6. Eksekusi Upload (Gunakan Try-Catch)
+    try {
+        // --- UPLOAD KE GOOGLE DRIVE ---
+        // Library otomatis bikin folder jika belum ada
+        Storage::disk('google')->putFileAs(
+            $folderPath, 
+            $file, 
+            $fileName
+        );
+
+        // --- SIMPAN KE DATABASE ---
+        Renstra::create([
+            'id_satker'    => $idSatker,
+            'id_periode'   => $id_periode,
+            'id_perubahan' => $id_perubahan,
+            'id_filename'  => $fileName,
+            // Gunakan format string jika kolom DB adalah VARCHAR
+            'id_tglupload' => now()->format('d/m/Y h:i A'), 
+        ]);
+
+        return Redirect::back()->with([
+            'success-renstra' => 'File Renstra berhasil disimpan ke Google Drive!',
+            'active_tab'      => 'renstra'
+        ]);
+
+    } catch (\Exception $e) {
+        // Tangkap error koneksi / token
+        return Redirect::back()->withErrors([
+            'renstra_file' => 'Gagal Upload ke Google Drive: ' . $e->getMessage()
+        ])->withInput();
+    }
+}
 
     // Fungsi untuk menangani upload file Iku
     public function uploadIku(Request $request)
-    {
-        $tahun = session('tahun_terpilih');
-        $request->validate([
-            'iku_file' => 'required|mimes:pdf|max:2048', // Maksimal 2MB
-        ]);
-
-        $idSatker = session('id_satker'); // Ambil id_satker dari session
-
-        // Cek id_perubahan yang sudah ada
-        $latestIku = Iku::where('id_satker', $idSatker)
-            ->where('id_periode', $tahun)
-            ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
-            ->first();
-
-        // Tentukan id_perubahan
-        $id_perubahan = $latestIku ? $latestIku->id_perubahan + 1 : 0;
-
-        // Upload file ke folder public/uploads/repository/iku
-        $file = $request->file('iku_file');
-        $fileName = 'IKU_' . $tahun . '_' . $id_perubahan .'.pdf';
-        $file->move(base_path('uploads/repository/'. $idSatker), $fileName);
-
-        // Simpan data ke database
-        Iku::create([
-            'id_satker' => $idSatker,
-            'id_periode' => $tahun,
-            'id_perubahan' => $id_perubahan,
-            'id_filename' => $fileName,
-            'id_tglupload' => now()->format('d/m/Y h:i A'),
-        ]);
-
-       return Redirect::route('perencanaan')->with('success-iku', 'File IKU berhasil diupload.')->with('active_tab', 'iku');
-    }
-
-    // Fungsi untuk menangani upload file Renja
-    public function uploadRenja(Request $request)
-    {
-        $tahun = session('tahun_terpilih');
-        $request->validate([
-            'renja_file' => 'required|mimes:pdf|max:2048', // Maksimal 2MB
-        ]);
-
-        $idSatker = session('id_satker'); // Ambil id_satker dari session
-
-        // Cek id_perubahan yang sudah ada
-        $latestrenja = Renja::where('id_satker', $idSatker)
-            ->where('id_periode', $tahun)
-            ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
-            ->first();
-
-        // Tentukan id_perubahan
-        $id_perubahan = $latestrenja ? $latestrenja->id_perubahan + 1 : 0;
-
-        // Upload file ke folder public/uploads/repository/renja
-        $file = $request->file('renja_file');
-        $fileName = 'renja_' . $tahun . '_' . $id_perubahan .'.pdf';
-        $file->move(base_path('uploads/repository/' . $idSatker), $fileName);
-
-        // Simpan data ke database
-        Renja::create([
-            'id_satker' => $idSatker,
-            'id_periode' => $tahun,
-            'id_perubahan' => $id_perubahan,
-            'id_filename' => $fileName,
-            'id_tglupload' => now()->format('d/m/Y h:i A'),
-        ]);
-
-       return Redirect::route('perencanaan')->with('success-renja', 'File renja berhasil diupload.')->with('active_tab', 'renja');
-    }
-
-    // Fungsi untuk menangani upload file Rkakl
-    public function uploadRkakl(Request $request)
-    {
-        $tahun = session('tahun_terpilih');
-        $request->validate([
-            'rkakl_file' => 'required|mimes:pdf|max:4096', // Maksimal 2MB
-        ]);
-
-        $idSatker = session('id_satker'); // Ambil id_satker dari session
-
-        // Cek id_perubahan yang sudah ada
-        $latestrkakl = Rkakl::where('id_satker', $idSatker)
-            ->where('id_periode', $tahun)
-            ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
-            ->first();
-
-        // Tentukan id_perubahan
-        $id_perubahan = $latestrkakl ? $latestrkakl->id_perubahan + 1 : 0;
-
-        // Upload file ke folder public/uploads/repository/rkakl
-        $file = $request->file('rkakl_file');
-        $fileName = 'rkakl_' . $tahun . '_'. $id_perubahan . '.pdf';
-        $file->move(base_path('uploads/repository/'.$idSatker), $fileName);
-
-        // Simpan data ke database
-        Rkakl::create([
-            'id_satker' => $idSatker,
-            'id_periode' => $tahun,
-            'id_perubahan' => $id_perubahan,
-            'id_filename' => $fileName,
-            'id_tglupload' => now()->format('d/m/Y h:i A'),
-        ]);
-
-       return Redirect::route('perencanaan')->with('success-rkakl', 'File rkakl berhasil diupload.')->with('active_tab', 'rkakl');
-    }
-
-    // Fungsi untuk menangani upload file Dipa
-    public function uploadDipa(Request $request)
 {
+    // 1. Ambil Session
     $tahun = session('tahun_terpilih');
-    $idSatker = session('id_satker'); // Ambil id_satker dari session
+    $idSatker = session('id_satker');
 
-    // Validasi input
+    // Cek Session (Agar tidak error jika user diam terlalu lama)
+    if (!$tahun || !$idSatker) {
+        return Redirect::back()->withErrors(['msg' => 'Sesi habis, silakan reload halaman.']);
+    }
+
+    // 2. Validasi
     $request->validate([
-        'dipa_file' => 'required|mimes:pdf|max:2048', // Maksimum 2MB, hanya PDF
-        'id_pagu' => 'required|numeric',
-        'id_gakyankum' => 'required|numeric',
-        'id_dukman' => 'required|numeric',
+        'iku_file' => 'required|mimes:pdf|max:10240', // Saya naikkan jadi 10MB biar aman
     ]);
 
-    // Ambil data perubahan terakhir dari tabel
-    $latestdipa = Dipa::where('id_satker', $idSatker)
+    // 3. Logic Versioning (ID Perubahan)
+    $latestIku = Iku::where('id_satker', $idSatker)
         ->where('id_periode', $tahun)
         ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
         ->first();
 
-    // Jika ada data sebelumnya, tambahkan +1 untuk id_perubahan, jika tidak mulai dari 0
-    $id_perubahan = ($latestdipa && is_numeric($latestdipa->id_perubahan)) ? $latestdipa->id_perubahan + 1 : 0;
+    $id_perubahan = $latestIku ? intval($latestIku->id_perubahan) + 1 : 0;
 
-    // Upload file ke folder public/uploads/repository/dipa
+    // 4. Siapkan File & Path
+    $file = $request->file('iku_file');
+    
+    // Nama File: IKU_2024_0.pdf
+    $fileName = 'IKU_' . $tahun . '_' . $id_perubahan .'.pdf';
+    
+    // Folder di Google Drive: uploads/repository/[ID_SATKER]
+    $folderPath = 'uploads/repository/'. $idSatker;
+
+    // 5. Eksekusi Upload (Try-Catch)
     try {
-        $file = $request->file('dipa_file');
-        $fileName = 'dipa_' . $tahun . '_'. $id_perubahan . '.pdf';
-        $destinationPath = base_path('uploads/repository/'.$idSatker);
-        
-        // Pindahkan file ke folder tujuan
-        $file->move($destinationPath, $fileName);
-    } catch (\Exception $e) {
-        return Redirect::back()->with('error', 'Gagal mengunggah file: ' . $e->getMessage());
-    }
- 
-    // Simpan data ke database
-    Dipa::create([
-        'id_satker' => $idSatker,
-        'id_periode' => $tahun,
-        'id_perubahan' => $id_perubahan,
-        'id_filename' => $fileName,
-        'id_pagu' => $request->input('id_pagu'),
-        'id_gakyankum' => $request->input('id_gakyankum'),
-        'id_dukman' => $request->input('id_dukman'),
-        'id_tglupload' => now()->format('d/m/Y h:i A'),
-    ]);
+        // --- UPLOAD KE GOOGLE DRIVE ---
+        Storage::disk('google')->putFileAs(
+            $folderPath, 
+            $file, 
+            $fileName
+        );
 
-   return Redirect::route('perencanaan')
-        ->with('success-dipa', 'File DIPA berhasil diupload.')
-        ->with('active_tab', 'dipa');
-}
-
-    // Fungsi untuk menangani upload file Dipa
-    public function uploadRenaksi(Request $request)
-    {
-        $tahun = session('tahun_terpilih');
-        $request->validate([
-            'renaksi_file' => 'required|mimes:pdf|max:2048', // Maksimal 2MB
-        ]);
-
-        $idSatker = session('id_satker'); // Ambil id_satker dari session
-
-        // Cek id_perubahan yang sudah ada
-        $latestrenaksi = Renaksi::where('id_satker', $idSatker)
-            ->where('id_periode', $tahun)
-            ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
-            ->first();
-
-        // Tentukan id_perubahan
-        $id_perubahan = $latestrenaksi ? $latestrenaksi->id_perubahan + 1 : 0;
-
-        // Upload file ke folder public/uploads/repository/renaksi
-        $file = $request->file('renaksi_file');
-        $fileName = 'renaksi_' . $tahun . '_'. $id_perubahan . '.pdf';
-        $file->move(base_path('uploads/repository/'.$idSatker), $fileName);
-
-        // Simpan data ke database
-        Renaksi::create([
-            'id_satker' => $idSatker,
-            'id_periode' => $tahun,
+        // --- SIMPAN KE DATABASE ---
+        Iku::create([
+            'id_satker'    => $idSatker,
+            'id_periode'   => $tahun,
             'id_perubahan' => $id_perubahan,
-            'id_filename' => $fileName,
+            'id_filename'  => $fileName,
             'id_tglupload' => now()->format('d/m/Y h:i A'),
         ]);
 
-       return Redirect::route('perencanaan')->with('success-renaksi', 'File renaksi berhasil diupload.')->with('active_tab', 'renaksi');
+        return Redirect::route('perencanaan')->with([
+            'success-iku' => 'File IKU berhasil diupload ke Google Drive.',
+            'active_tab'  => 'iku'
+        ]);
+
+    } catch (\Exception $e) {
+        // Tangkap error token/koneksi
+        return Redirect::back()->withErrors([
+            'iku_file' => 'Gagal Upload ke Google Drive: ' . $e->getMessage()
+        ])->withInput();
+    }
+}
+
+    // Fungsi untuk menangani upload file Renja
+ // ==========================================
+// 1. UPLOAD RENJA (Google Drive Version)
+// ==========================================
+public function uploadRenja(Request $request)
+{
+    $tahun = session('tahun_terpilih');
+    $idSatker = session('id_satker');
+
+    if (!$tahun || !$idSatker) {
+        return Redirect::back()->withErrors(['msg' => 'Sesi habis, silakan reload.']);
     }
 
+    $request->validate([
+        'renja_file' => 'required|mimes:pdf|max:10240', // Max 10MB
+    ]);
+
+    $latestRenja = Renja::where('id_satker', $idSatker)
+        ->where('id_periode', $tahun)
+        ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
+        ->first();
+
+    $id_perubahan = $latestRenja ? intval($latestRenja->id_perubahan) + 1 : 0;
+    
+    $file = $request->file('renja_file');
+    $fileName = 'renja_' . $tahun . '_' . $id_perubahan .'.pdf';
+    $folderPath = 'uploads/repository/' . $idSatker;
+
+    try {
+        Storage::disk('google')->putFileAs($folderPath, $file, $fileName);
+
+        Renja::create([
+            'id_satker'    => $idSatker,
+            'id_periode'   => $tahun,
+            'id_perubahan' => $id_perubahan,
+            'id_filename'  => $fileName,
+            'id_tglupload' => now()->format('d/m/Y h:i A'),
+        ]);
+
+        return Redirect::route('perencanaan')->with([
+            'success-renja' => 'File Renja berhasil diupload ke Google Drive.',
+            'active_tab'    => 'renja'
+        ]);
+
+    } catch (\Exception $e) {
+        return Redirect::back()->withErrors(['renja_file' => 'Gagal Upload: ' . $e->getMessage()]);
+    }
+}
+
+// ==========================================
+// 2. UPLOAD RKAKL (Google Drive Version)
+// ==========================================
+public function uploadRkakl(Request $request)
+{
+    $tahun = session('tahun_terpilih');
+    $idSatker = session('id_satker');
+
+    if (!$tahun || !$idSatker) {
+        return Redirect::back()->withErrors(['msg' => 'Sesi habis.']);
+    }
+
+    $request->validate([
+        'rkakl_file' => 'required|mimes:pdf|max:10240',
+    ]);
+
+    $latestRkakl = Rkakl::where('id_satker', $idSatker)
+        ->where('id_periode', $tahun)
+        ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
+        ->first();
+
+    $id_perubahan = $latestRkakl ? intval($latestRkakl->id_perubahan) + 1 : 0;
+
+    $file = $request->file('rkakl_file');
+    $fileName = 'rkakl_' . $tahun . '_'. $id_perubahan . '.pdf';
+    $folderPath = 'uploads/repository/' . $idSatker;
+
+    try {
+        Storage::disk('google')->putFileAs($folderPath, $file, $fileName);
+
+        Rkakl::create([
+            'id_satker'    => $idSatker,
+            'id_periode'   => $tahun,
+            'id_perubahan' => $id_perubahan,
+            'id_filename'  => $fileName,
+            'id_tglupload' => now()->format('d/m/Y h:i A'),
+        ]);
+
+        return Redirect::route('perencanaan')->with([
+            'success-rkakl' => 'File RKAKL berhasil diupload ke Google Drive.',
+            'active_tab'    => 'rkakl'
+        ]);
+
+    } catch (\Exception $e) {
+        return Redirect::back()->withErrors(['rkakl_file' => 'Gagal Upload: ' . $e->getMessage()]);
+    }
+}
+
+// ==========================================
+// 3. UPLOAD DIPA (Google Drive Version)
+// ==========================================
+public function uploadDipa(Request $request)
+{
+    $tahun = session('tahun_terpilih');
+    $idSatker = session('id_satker');
+
+    if (!$tahun || !$idSatker) {
+        return Redirect::back()->withErrors(['msg' => 'Sesi habis.']);
+    }
+
+    // Validasi input tambahan (Pagu, dll)
+    $request->validate([
+        'dipa_file'    => 'required|mimes:pdf|max:10240',
+        'id_pagu'      => 'required|numeric',
+        'id_gakyankum' => 'required|numeric',
+        'id_dukman'    => 'required|numeric',
+    ]);
+
+    $latestDipa = Dipa::where('id_satker', $idSatker)
+        ->where('id_periode', $tahun)
+        ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
+        ->first();
+
+    $id_perubahan = $latestDipa ? intval($latestDipa->id_perubahan) + 1 : 0;
+
+    $file = $request->file('dipa_file');
+    $fileName = 'dipa_' . $tahun . '_'. $id_perubahan . '.pdf';
+    $folderPath = 'uploads/repository/' . $idSatker;
+
+    try {
+        // Upload ke Google Drive
+        Storage::disk('google')->putFileAs($folderPath, $file, $fileName);
+
+        // Simpan DB dengan data Pagu
+        Dipa::create([
+            'id_satker'    => $idSatker,
+            'id_periode'   => $tahun,
+            'id_perubahan' => $id_perubahan,
+            'id_filename'  => $fileName,
+            'id_pagu'      => $request->input('id_pagu'),
+            'id_gakyankum' => $request->input('id_gakyankum'),
+            'id_dukman'    => $request->input('id_dukman'),
+            'id_tglupload' => now()->format('d/m/Y h:i A'),
+        ]);
+
+        return Redirect::route('perencanaan')->with([
+            'success-dipa' => 'File DIPA berhasil diupload ke Google Drive.',
+            'active_tab'   => 'dipa'
+        ]);
+
+    } catch (\Exception $e) {
+        return Redirect::back()->withErrors(['dipa_file' => 'Gagal Upload: ' . $e->getMessage()])->withInput();
+    }
+}
+
+// ==========================================
+// 4. UPLOAD RENAKSI (Google Drive Version)
+// ==========================================
+public function uploadRenaksi(Request $request)
+{
+    $tahun = session('tahun_terpilih');
+    $idSatker = session('id_satker');
+
+    if (!$tahun || !$idSatker) {
+        return Redirect::back()->withErrors(['msg' => 'Sesi habis.']);
+    }
+
+    $request->validate([
+        'renaksi_file' => 'required|mimes:pdf|max:10240',
+    ]);
+
+    $latestRenaksi = Renaksi::where('id_satker', $idSatker)
+        ->where('id_periode', $tahun)
+        ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
+        ->first();
+
+    $id_perubahan = $latestRenaksi ? intval($latestRenaksi->id_perubahan) + 1 : 0;
+
+    $file = $request->file('renaksi_file');
+    $fileName = 'renaksi_' . $tahun . '_'. $id_perubahan . '.pdf';
+    $folderPath = 'uploads/repository/' . $idSatker;
+
+    try {
+        Storage::disk('google')->putFileAs($folderPath, $file, $fileName);
+
+        Renaksi::create([
+            'id_satker'    => $idSatker,
+            'id_periode'   => $tahun,
+            'id_perubahan' => $id_perubahan,
+            'id_filename'  => $fileName,
+            'id_tglupload' => now()->format('d/m/Y h:i A'),
+        ]);
+
+        return Redirect::route('perencanaan')->with([
+            'success-renaksi' => 'File Renaksi berhasil diupload ke Google Drive.',
+            'active_tab'      => 'renaksi'
+        ]);
+
+    } catch (\Exception $e) {
+        return Redirect::back()->withErrors(['renaksi_file' => 'Gagal Upload: ' . $e->getMessage()]);
+    }
+}
     public function storetarget(Request $request)
     {
         $request->validate([
@@ -407,174 +510,165 @@ public function uploadPK(Request $request)
 }
 // ... (Method uploadPK Anda yang ada)
 
-    // 🔽 [AWAL] KODE BARU UNTUK UPDATE FILE 🔽
-    /**
-     * Memperbarui file dokumen yang ada (dipanggil dari modal edit).
-     */
-    public function updateFile(Request $request, $type, $id)
-    {
-        $id_satker = session('id_satker');
-        $tahun = session('tahun_terpilih');
+ // 🔽 [AWAL] KODE BARU UNTUK UPDATE FILE (Google Drive) 🔽
+public function updateFile(Request $request, $type, $id)
+{
+    $id_satker = session('id_satker');
+    $tahun = session('tahun_terpilih');
 
-        $validator = Validator::make($request->all(), [
-            'file' => 'nullable|file|mimes:pdf|max:5120', // 5MB max
-            'id_pagu' => 'nullable|numeric',
-            'id_gakyankum' => 'nullable|numeric',
-            'id_dukman' => 'nullable|numeric',
-        ]);
+    // 1. Validasi
+    $validator = Validator::make($request->all(), [
+        'file' => 'nullable|file|mimes:pdf|max:10240', // Max 10MB
+        'id_pagu' => 'nullable|numeric',
+        'id_gakyankum' => 'nullable|numeric',
+        'id_dukman' => 'nullable|numeric',
+    ]);
 
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput()->with('activeTab', $type);
+    if ($validator->fails()) {
+        return back()->withErrors($validator)->withInput()->with('activeTab', $type);
+    }
+
+    // 2. Mapping Route Type ke Model Class
+    $modelMap = [
+        'renstra' => \App\Models\Renstra::class,
+        'iku'     => \App\Models\Iku::class,
+        'renja'   => \App\Models\Renja::class,
+        'rkakl'   => \App\Models\Rkakl::class,
+        'dipa'    => \App\Models\Dipa::class,
+        'renaksi' => \App\Models\Renaksi::class,
+        'pk'      => \App\Models\Pk::class,
+    ];
+
+    if (!isset($modelMap[$type])) {
+        return back()->with('error', 'Tipe dokumen tidak valid.')->with('activeTab', $type);
+    }
+
+    $modelClass = $modelMap[$type];
+
+    try {
+        // 3. Temukan Record
+        $fileRecord = $modelClass::where('id', $id)
+            ->where('id_satker', $id_satker)
+            ->first();
+
+        if (!$fileRecord) {
+            return back()->with('error', 'File tidak ditemukan atau akses ditolak.');
         }
 
-        // Mapping 'type' dari route ke Model Class yang sesuai
-        $modelMap = [
-            'renstra' => \App\Models\Renstra::class,
-            'iku'     => \App\Models\Iku::class,
-            'renja'   => \App\Models\Renja::class,
-            'rkakl'   => \App\Models\Rkakl::class,
-            'dipa'    => \App\Models\Dipa::class,
-            'renaksi' => \App\Models\Renaksi::class,
-            'pk'      => \App\Models\Pk::class,
-        ];
+        // Folder Google Drive
+        $folderPath = 'uploads/repository/' . $id_satker;
 
-        if (!isset($modelMap[$type])) {
-            return back()->with('error', 'Tipe dokumen tidak valid.')->with('activeTab', $type);
+        // 4. Khusus Update Data DIPA (Metadata)
+        if ($type == 'dipa') {
+            if ($request->filled('id_pagu')) $fileRecord->id_pagu = $request->input('id_pagu');
+            if ($request->filled('id_gakyankum')) $fileRecord->id_gakyankum = $request->input('id_gakyankum');
+            if ($request->filled('id_dukman')) $fileRecord->id_dukman = $request->input('id_dukman');
         }
 
-        $modelClass = $modelMap[$type];
-
-        try {
-            // 1. Temukan record file yang akan diupdate
-            $fileRecord = $modelClass::where('id', $id)
-                                    ->where('id_satker', $id_satker)
-                                    ->first();
-
-            if (!$fileRecord) {
-                return back()->with('error', 'File tidak ditemukan atau Anda tidak berwenang.');
-            }
-
-            $basePath = base_path('uploads/repository/' . $id_satker . '/');
-
-            // 2. Handle data DIPA (jika ini adalah update DIPA)
-            if ($type == 'dipa') {
-                if ($request->filled('id_pagu')) {
-                    $fileRecord->id_pagu = $request->input('id_pagu');
-                }
-                if ($request->filled('id_gakyankum')) {
-                    $fileRecord->id_gakyankum = $request->input('id_gakyankum');
-                }
-                if ($request->filled('id_dukman')) {
-                    $fileRecord->id_dukman = $request->input('id_dukman');
-                }
-            }
-
-            // 3. Handle upload file baru (jika ada)
-            if ($request->hasFile('file')) {
-                // A. Hapus file lama dari storage
-                $oldFileName = $fileRecord->id_filename;
-                $oldFilePath = $basePath . $oldFileName;
-                
-                if (File::exists($oldFilePath)) {
-                    File::delete($oldFilePath);
-                }
-
-                // B. Buat nama file baru (versi + 1) dan simpan
-                $newPerubahan = $fileRecord->id_perubahan + 1;
-
-                // Tentukan prefix nama file baru
-                $prefixMap = [
-                    'renstra' => 'renstra', 'iku' => 'IKU', 'renja' => 'renja',
-                    'rkakl' => 'rkakl', 'dipa' => 'dipa', 'renaksi' => 'renaksi', 'pk' => 'pk',
-                ];
-                $prefix = $prefixMap[$type];
-                $newFileName = $prefix . '_' . $tahun . '_' . $newPerubahan . '.pdf';
-
-                // Simpan file baru
-                $request->file('file')->move($basePath, $newFileName);
-
-                // C. Siapkan data update untuk DB
-                $fileRecord->id_filename = $newFileName;
-                $fileRecord->id_perubahan = $newPerubahan;
-                $fileRecord->id_tglupload = now()->format('d/m/Y h:i A');
+        // 5. Handle Upload File Baru (Jika ada)
+        if ($request->hasFile('file')) {
             
-            } 
-            // 4. Cek jika tidak ada file baru DAN tidak ada update data DIPA
-            elseif (!$fileRecord->isDirty()) { // isDirty() mengecek apakah ada perubahan atribut model
-                return back()->with('error', 'Tidak ada perubahan. File baru tidak diupload dan/atau data DIPA tidak diubah.')
-                             ->with('activeTab', $type);
+            // A. Hapus File Lama di Google Drive
+            if ($fileRecord->id_filename) {
+                $pathLama = $folderPath . '/' . $fileRecord->id_filename;
+                if (Storage::disk('google')->exists($pathLama)) {
+                    Storage::disk('google')->delete($pathLama);
+                }
             }
 
-            // 5. Eksekusi Update ke Database
-            $fileRecord->save();
+            // B. Generate Nama File Baru
+            $newPerubahan = intval($fileRecord->id_perubahan) + 1;
+            
+            // Mapping Prefix Nama File
+            $prefixMap = [
+                'renstra' => 'renstra', 'iku' => 'IKU', 'renja' => 'renja',
+                'rkakl' => 'rkakl', 'dipa' => 'dipa', 'renaksi' => 'renaksi', 'pk' => 'pk',
+            ];
+            
+            $prefix = $prefixMap[$type] ?? $type;
+            
+            // Format: renstra_2024_1.pdf
+            $newFileName = $prefix . '_' . $tahun . '_' . $newPerubahan . '.pdf';
 
-            return back()->with('success-update', 'Dokumen berhasil diperbarui.')
-                         ->with('activeTab', $type);
+            // C. Upload ke Google Drive
+            Storage::disk('google')->putFileAs($folderPath, $request->file('file'), $newFileName);
 
-        } catch (\Exception $e) {
-            return back()->with('error', 'Gagal memperbarui file: ' . $e->getMessage())
+            // D. Update Metadata DB
+            $fileRecord->id_filename = $newFileName;
+            $fileRecord->id_perubahan = $newPerubahan;
+            $fileRecord->id_tglupload = now()->format('d/m/Y h:i A');
+        } 
+        
+        // 6. Cek Dirty (Apakah ada perubahan sama sekali?)
+        elseif (!$fileRecord->isDirty()) {
+            return back()->with('error', 'Tidak ada perubahan data.')
                          ->with('activeTab', $type);
         }
+
+        // 7. Simpan DB
+        $fileRecord->save();
+
+        return back()->with('success-update', 'Dokumen berhasil diperbarui.')
+                     ->with('activeTab', $type);
+
+    } catch (\Exception $e) {
+        return back()->with('error', 'Gagal update: ' . $e->getMessage())
+                     ->with('activeTab', $type);
     }
-    // 🔼 [AKHIR] KODE BARU UNTUK UPDATE FILE 🔼
+}
+// 🔼 [AKHIR] KODE UPDATE FILE 🔼
 
 
-    // 🔽 [AWAL] KODE BARU UNTUK DELETE FILE 🔽
-    /**
-     * Menghapus file dokumen.
-     */
-    public function deleteFile($type, $id)
-    {
-        $id_satker = session('id_satker');
+// 🔽 [AWAL] KODE BARU UNTUK DELETE FILE (Google Drive) 🔽
+public function deleteFile($type, $id)
+{
+    $id_satker = session('id_satker');
 
-        // Mapping 'type' dari route ke Model Class yang sesuai
-        $modelMap = [
-            'renstra' => \App\Models\Renstra::class,
-            'iku'     => \App\Models\Iku::class,
-            'renja'   => \App\Models\Renja::class,
-            'rkakl'   => \App\Models\Rkakl::class,
-            'dipa'    => \App\Models\Dipa::class,
-            'renaksi' => \App\Models\Renaksi::class,
-            'pk'      => \App\Models\Pk::class,
-        ];
+    // 1. Mapping Type
+    $modelMap = [
+        'renstra' => \App\Models\Renstra::class,
+        'iku'     => \App\Models\Iku::class,
+        'renja'   => \App\Models\Renja::class,
+        'rkakl'   => \App\Models\Rkakl::class,
+        'dipa'    => \App\Models\Dipa::class,
+        'renaksi' => \App\Models\Renaksi::class,
+        'pk'      => \App\Models\Pk::class,
+    ];
 
-        if (!isset($modelMap[$type])) {
-            return back()->with('error', 'Tipe dokumen tidak valid.')->with('activeTab', $type);
-        }
-
-        $modelClass = $modelMap[$type];
-
-        try {
-            // 1. Temukan record file
-            $fileRecord = $modelClass::where('id', $id)
-                                    ->where('id_satker', $id_satker)
-                                    ->first();
-
-            if (!$fileRecord) {
-                return back()->with('error', 'File tidak ditemukan atau Anda tidak berwenang.');
-            }
-
-            // 2. Tentukan nama file dan path
-            $basePath = base_path('uploads/repository/' . $id_satker . '/');
-            $fileName = $fileRecord->id_filename;
-            $filePath = $basePath . $fileName;
-
-            // 3. Hapus file dari storage (Gunakan File Facade)
-            if (File::exists($filePath)) {
-                File::delete($filePath);
-            }
-
-            // 4. Hapus record dari database
-            $fileRecord->delete();
-
-            return back()->with('success-delete', 'Dokumen berhasil dihapus.')
-                         ->with('activeTab', $type);
-
-        } catch (\Exception $e) {
-            return back()->with('error', 'Gagal menghapus file: ' . $e->getMessage())
-                         ->with('activeTab', $type);
-        }
+    if (!isset($modelMap[$type])) {
+        return back()->with('error', 'Tipe dokumen tidak valid.')->with('activeTab', $type);
     }
+
+    $modelClass = $modelMap[$type];
+
+    try {
+        // 2. Temukan Record
+        $fileRecord = $modelClass::where('id', $id)
+            ->where('id_satker', $id_satker)
+            ->first();
+
+        if (!$fileRecord) {
+            return back()->with('error', 'File tidak ditemukan.');
+        }
+
+        // 3. Hapus File Fisik di Google Drive
+        $pathFile = 'uploads/repository/' . $id_satker . '/' . $fileRecord->id_filename;
+
+        if (Storage::disk('google')->exists($pathFile)) {
+            Storage::disk('google')->delete($pathFile);
+        }
+
+        // 4. Hapus Record DB
+        $fileRecord->delete();
+
+        return back()->with('success-delete', 'Dokumen berhasil dihapus permanen.')
+                     ->with('activeTab', $type);
+
+    } catch (\Exception $e) {
+        return back()->with('error', 'Gagal hapus: ' . $e->getMessage())
+                     ->with('activeTab', $type);
+    }
+}
     // 🔼 [AKHIR] KODE BARU UNTUK DELETE FILE 🔼
 
 } // <-- Penutup Class Controller
