@@ -16,39 +16,43 @@ use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
-
 class PelaporanController extends Controller
 {
     public function index(Request $request)
     {
-        // Cek apakah tahun sudah dipilih
+        // Cek Session Tahun
         if (!session()->has('tahun_terpilih')) {
             return Redirect::route('pilih.tahun');
         }
+
         $level = session('id_sakip_level');
         $tahun = session('tahun_terpilih');
         $idSatker = session('id_satker');
         $id_bidang = $request->get('id_bidang');
-        $indikators = [];
-        $data = [];
-
-        // Ambil data dari database
+        
+        // Ambil Data File LKJiP
         $lkjipFiles = Lkjip::where('id_periode', $tahun)
             ->where('id_satker', $idSatker)
             ->orderBy('id_perubahan', 'desc')
             ->get();
 
+        // Ambil Data File Rapat Staff
         $rapatStaffEkaFiles = RapatStaffEka::where('id_satker', $idSatker)
             ->where('id_periode', $tahun)
             ->orderBy('id_tglupload', 'desc')
             ->get();
 
+        // Ambil Data Bidang (Sesuai Level)
         $bidangs = in_array($level, [2, 3])
             ? Bidang::where('bidang_lokasi', $level)
-            ->where('bidang_level', '!=', null)
-            ->orderBy('bidang_level', 'asc')
-            ->get()
+                ->where('bidang_level', '!=', null)
+                ->orderBy('bidang_level', 'asc')
+                ->get()
             : [];
+
+        // Logic Indikator & Pengukuran (Jika filter bidang dipilih)
+        $indikators = [];
+        $data = [];
 
         if ($id_bidang) {
             $indikators = Indikator::where('id_bidang', $id_bidang)->get();
@@ -70,259 +74,205 @@ class PelaporanController extends Controller
                     $data[$indikator->id]['sub'][$sub] = $pengukuranData
                         ->where('sub_indikator', $sub)
                         ->where('id_satker', $idSatker)
-                        ->keyBy('bulan'); // <--- agar mudah akses berdasarkan bulan
+                        ->keyBy('bulan');
                 }
             }
         }
 
-        // $rapatStaffEkaFiles = RapatStaffEka::orderBy('id_tglupload', 'desc')->get();
-
-        return Inertia::render('Kelola/Pelaporan', ['tahun' => $tahun, 'bidangs' => $bidangs, 'lkjipFiles' => $lkjipFiles,  'rapatStaffEkaFiles' => $rapatStaffEkaFiles,]);
+        return Inertia::render('Kelola/Pelaporan', [
+            'tahun' => $tahun, 
+            'bidangs' => $bidangs, 
+            'lkjipFiles' => $lkjipFiles,  
+            'rapatStaffEkaFiles' => $rapatStaffEkaFiles,
+        ]);
     }
+
+ // =========================================================================
+    // 🔽 BAGIAN API DATA (Indikator & Pengukuran) 🔽
+    // =========================================================================
 
     public function getIndikatorByBidang($id_bidang)
     {
         $indikator = Indikator::where('id_bidang', $id_bidang)
             ->select('id', 'indikator_nama', 'sub_indikator')
             ->get();
-
         return response()->json($indikator);
     }
 
-    // public function getSubIndikatorByRumpun($rumpun)
-    // {
-    //     $indikator = Indikator::where('id_bidang', $rumpun)->get();
-
-    //     return response()->json($indikator);
-    // }
-
-    // public function getSubIndikator($rumpun) //milik pengukuran
-    // {
-    //     $indikators = Indikator::where('link', $rumpun)->get();
-
-    //     return response()->json($indikators);
-    // }
-
-    //Indikator untuk menu pengukuran
     public function getSubIndikator($rumpun)
     {
         $tahun = session('tahun_terpilih');
         $level = session('id_sakip_level');
 
-        // Ambil semua indikator dengan filter rumpun dan tahun
         $indikators = Indikator::where('link', $rumpun)
             ->where('tahun', 'LIKE', "%$tahun%")
             ->get();
 
-        // Filter berdasarkan lingkup & level
         $filtered = $indikators->filter(function ($indikator) use ($level) {
+            // Filter switch case sesuai kebutuhan Anda (dipertahankan dari kode asli)
             switch ($indikator->lingkup ?? 0) {
-                case 0:
-                    return in_array($level, [1, 2, 3, 4]);
-                case 1:
-                    return $level == 1;
-                case 2:
-                    return $level == 2;
-                case 3:
-                    return $level == 3;
-                case 4:
-                    return $level == 4;
-                case 5:
-                    return in_array($level, [2, 3]);
-                case 6:
-                    return in_array($level, [3, 4]);
-                case 7:
-                    return in_array($level, [2, 3, 4]);
-                default:
-                    return false;
+                case 0: return in_array($level, [1, 2, 3, 4]);
+                case 1: return $level == 1;
+                case 2: return $level == 2;
+                case 3: return $level == 3;
+                case 4: return $level == 4;
+                case 5: return in_array($level, [2, 3]);
+                case 6: return in_array($level, [3, 4]);
+                case 7: return in_array($level, [2, 3, 4]);
+                default: return false;
             }
-        })->values(); // reset keys
+        })->values();
 
         return response()->json($filtered);
     }
 
     public function getSubIndikator2($rumpun, Request $request)
-{
-    $id_satker = session('id_satker');
-    $tw = $request->query('triwulan', 1);
-    $tahun = session('tahun_terpilih');
-    $bulan_awal = ($tw - 1) * 3 + 1;
-    $bulan_akhir = $bulan_awal + 2;
-    $level = session('id_sakip_level');
+    {
+        $id_satker = session('id_satker');
+        $tw = $request->query('triwulan', 1);
+        $tahun = session('tahun_terpilih');
+        $bulan_awal = ($tw - 1) * 3 + 1;
+        $bulan_akhir = $bulan_awal + 2;
+        $level = session('id_sakip_level');
 
-    // === Ambil indikator sesuai rumpun, tahun, dan lingkup level ===
-    $indikators = Indikator::where('link', $rumpun)
-        ->where(function ($query) use ($tahun) {
-            $query->where('tahun', 'LIKE', "%$tahun%");
-        })
-        ->where(function ($query) use ($level) {
-            if ($level == 1) {
-                $query->whereIn('lingkup', [0, 1]);
-            } elseif ($level == 2) {
-                $query->whereIn('lingkup', [0, 2, 5, 7]);
-            } elseif ($level == 3) {
-                $query->whereIn('lingkup', [0, 3, 5, 6, 7]);
-            } elseif ($level == 4) {
-                $query->whereIn('lingkup', [0, 4, 6, 7]);
-            }
-        })
-        ->get();
+        // Query Indikator (Cleaned up)
+        $indikators = Indikator::where('link', $rumpun)
+            ->where('tahun', 'LIKE', "%$tahun%")
+            ->where(function ($query) use ($level) {
+                if ($level == 1) $query->whereIn('lingkup', [0, 1]);
+                elseif ($level == 2) $query->whereIn('lingkup', [0, 2, 5, 7]);
+                elseif ($level == 3) $query->whereIn('lingkup', [0, 3, 5, 6, 7]);
+                elseif ($level == 4) $query->whereIn('lingkup', [0, 4, 6, 7]);
+            })
+            ->get();
 
-    $data = [];
+        $data = [];
 
-    foreach ($indikators as $indikator) {
-        $persentase = 0;
+        foreach ($indikators as $indikator) {
+            $persentase = 0; // Default 0 agar tidak error variable undefined
 
-        // === Tentukan label penghitungan (default: Ditangani, Diselesaikan) ===
-        $labels = [];
-        if (!empty($indikator->indikator_penghitungan)) {
-            $labels = array_map('trim', explode(',', strtolower($indikator->indikator_penghitungan)));
-        }
-        if (empty($labels)) {
-            $labels = ['ditangani', 'diselesaikan'];
-        }
+            // Label Handling
+            $rawLabels = strtolower($indikator->indikator_penghitungan ?? '');
+            $labels = !empty($rawLabels) ? array_map('trim', explode(',', $rawLabels)) : ['ditangani', 'diselesaikan'];
 
-        if (count($labels) == 1) {
-            // === MODE 1 LABEL ===
-            // Ambil capaian dari bulan terakhir triwulan (misalnya 3,6,9,12)
-            $lastMonth = $bulan_akhir;
+            if (count($labels) == 1) {
+                // Single Label Logic
+                $persentase = DB::table('pengukuran')
+                    ->where('id_satker', $id_satker)
+                    ->where('tahun', $tahun)
+                    ->where('indikator_id', $indikator->id)
+                    ->where('bulan', $bulan_akhir) // Ambil bulan terakhir TW
+                    ->orderBy('id', 'desc')
+                    ->value('capaian') ?? 0;
 
-            $persentase = DB::table('pengukuran')
-                ->where('id_satker', $id_satker)
-                ->where('tahun', $tahun)
-                ->where('indikator_id', $indikator->id)
-                ->where('bulan', $lastMonth)
-                ->orderBy('id', 'desc')
-                ->value('capaian') ?? 0;
+            } elseif (count($labels) > 1) {
+                // Multi Label Logic (Kalkulasi Rata-rata Sub Indikator)
+                $rows = DB::table('pengukuran')
+                    ->where('id_satker', $id_satker)
+                    ->where('tahun', $tahun)
+                    ->where('indikator_id', $indikator->id)
+                    ->whereBetween('bulan', [1, $bulan_akhir]) // Kumulatif
+                    ->get(['sub_indikator', 'perhitungan']);
 
-        } elseif (count($labels) > 1) {
-            // === MODE MULTI LABEL (pembilang/penyebut dari field perhitungan) ===
-            $rows = DB::table('pengukuran')
-                ->where('id_satker', $id_satker)
-                ->where('tahun', $tahun)
-                ->where('indikator_id', $indikator->id)
-                ->whereBetween('bulan', [1, $bulan_akhir]) // kumulatif s.d akhir TW
-                ->get(['sub_indikator', 'perhitungan']);
+                $persentaseSub = [];
 
-            $persentaseSub = [];
-
-            foreach ($rows->groupBy('sub_indikator') as $subIndikator => $dataRow) {
-                $pembilang = 0;
-                $penyebut = 0;
-
-                foreach ($dataRow as $row) {
-                    if (!empty($row->perhitungan) && str_contains($row->perhitungan, ';')) {
-                        [$a, $b] = explode(';', $row->perhitungan);
-
-                        // Anggap format "penyebut;pembilang"
-                        $penyebut += (float) $a;
-                        $pembilang += (float) $b;
+                foreach ($rows->groupBy('sub_indikator') as $dataRow) {
+                    $pembilang = 0; 
+                    $penyebut = 0;
+                    foreach ($dataRow as $row) {
+                        if (!empty($row->perhitungan) && str_contains($row->perhitungan, ';')) {
+                            [$a, $b] = explode(';', $row->perhitungan);
+                            $penyebut += (float) $a;
+                            $pembilang += (float) $b;
+                        }
+                    }
+                    if ($penyebut > 0) {
+                        $persentaseSub[] = round(($pembilang / $penyebut) * 100, 2);
                     }
                 }
-
-                if ($penyebut > 0) {
-                    $persentaseSub[] = round(($pembilang / $penyebut) * 100, 2);
-                }
+                
+                // Hitung Rata-rata dari semua sub indikator
+                $persentase = count($persentaseSub) > 0 
+                    ? round(array_sum($persentaseSub) / count($persentaseSub), 2) 
+                    : 0;
             }
 
-            // Ambil rata-rata semua persentase sub indikator
-            $persentase = count($persentaseSub) > 0
-                ? round(array_sum($persentaseSub) / count($persentaseSub), 2)
+            // Hitung Capaian PK vs Target
+            $target_pk = DB::table('target')
+                ->where('id_satker', $id_satker)
+                ->where('tahun', $tahun)
+                ->where('indikator_id', $indikator->id)
+                ->value('target_tahun') ?? 0;
+
+            $capaian_pk = $target_pk > 0 
+                ? round(($persentase / $target_pk) * 100, 2) 
                 : 0;
+
+            // Ambil Data Keterangan (Faktor & Langkah)
+            $first = DB::table('pengukuran')
+                ->where('id_satker', $id_satker)
+                ->where('tahun', $tahun)
+                ->where('indikator_id', $indikator->id)
+                ->where('bulan', $bulan_akhir)
+                ->orderBy('bulan', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+
+            $data[] = [
+                'indikator_id' => $indikator->id,
+                'indikator_nama' => $indikator->indikator_nama,
+                'indikator_penghitungan' => implode(', ', $labels),
+                'persentase' => $persentase,
+                'target_pk' => $target_pk,
+                'capaian_pk' => $capaian_pk,
+                'faktor' => $first->faktor ?? '',
+                'langkah_optimalisasi' => $first->langkah_optimalisasi ?? '',
+            ];
         }
 
-        // === Ambil Target PK ===
-        $target_pk = DB::table('target')
-            ->where('id_satker', $id_satker)
-            ->where('tahun', $tahun)
-            ->where('indikator_id', $indikator->id)
-            ->value('target_tahun') ?? 0;
-
-        // === Hitung capaian PK ===
-        $capaian_pk = $target_pk > 0
-            ? round(($persentase / $target_pk) * 100, 2)
-            : 0;
-
-        // === Ambil faktor & langkah (dari bulan terakhir triwulan) ===
-        $first = DB::table('pengukuran')
-    ->where('id_satker', $id_satker)
-    ->where('tahun', $tahun)
-    ->where('indikator_id', $indikator->id)
-    ->where('bulan', $bulan_akhir)
-    ->where(function ($q) {
-        $q->whereNotNull('faktor')
-          ->orWhereNotNull('langkah_optimalisasi');
-    })
-    ->orderBy('bulan', 'desc')
-    ->orderBy('id', 'desc')
-    ->first();
-
-        $data[] = [
-            'indikator_id' => $indikator->id,
-            'indikator_nama' => $indikator->indikator_nama,
-            'indikator_penghitungan' => $indikator->indikator_penghitungan ?: 'Ditangani, Diselesaikan',
-            'persentase' => $persentase,
-            'target_pk' => $target_pk,
-            'capaian_pk' => $capaian_pk,
-            'faktor' => $first->faktor ?? '',
-            'langkah_optimalisasi' => $first->langkah_optimalisasi ?? '',
-        ];
+        return response()->json($data);
     }
-
-    return response()->json($data);
-}
 
     public function simpanKeterangan(Request $request)
     {
         $request->validate([
-         'data'     => 'required|array', // Pastikan 'data' adalah array
-        'triwulan' => 'required'
+            'data'     => 'required|array',
+            'triwulan' => 'required'
         ]);
-        $id_satker = session('id_satker'); 
+
+        $id_satker = session('id_satker');
         $tahun = session('tahun_terpilih');
         $bulan_akhir = ($request->triwulan - 1) * 3 + 3;
-DB::beginTransaction();
 
-    try {
-        // 2. Looping data yang dikirim dari React
-        foreach ($request->data as $item) {
-            
-            // Cari data Pengukuran yang sesuai
-            $pengukuran = Pengukuran::where('id_satker', $id_satker)
-                ->where('tahun', $tahun)
-                ->where('indikator_id', $item['indikator_id']) // Pastikan Frontend kirim 'id' indikator
-                ->where('bulan', $bulan_akhir)
-                ->first();
+        DB::beginTransaction();
+        try {
+            foreach ($request->data as $item) {
+                // Cari data Pengukuran di bulan akhir triwulan
+                $pengukuran = Pengukuran::where('id_satker', $id_satker)
+                    ->where('tahun', $tahun)
+                    ->where('indikator_id', $item['indikator_id'])
+                    ->where('bulan', $bulan_akhir)
+                    ->first();
 
-            // Jika data ditemukan, update
-            if ($pengukuran) {
-                $pengukuran->faktor = $item['faktor'] ?? null;
-                
-                // Perhatikan: Frontend mengirim 'langkah_optimalisasi', sesuaikan kuncinya
-                $pengukuran->langkah_optimalisasi = $item['langkah_optimalisasi'] ?? null;
-                
-                $pengukuran->save();
-            } else {
-                // Opsional: Jika data pengukuran belum ada (misal belum digenerate), 
-                // Anda bisa memilih untuk membiarkannya atau membuat log error.
-                // Untuk saat ini kita skip saja agar proses tidak berhenti.
+                if ($pengukuran) {
+                    $pengukuran->faktor = $item['faktor'] ?? null;
+                    $pengukuran->langkah_optimalisasi = $item['langkah_optimalisasi'] ?? null;
+                    $pengukuran->save();
+                }
             }
+            DB::commit();
+            return response()->json(['status' => 'success', 'message' => 'Keterangan berhasil disimpan']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
-
-        DB::commit();
-        return response()->json(['status' => 'success', 'message' => 'Data berhasil disimpan']);
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-        return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
-}
 
-  public function uploadLkjip(Request $request)
+ public function uploadLkjip(Request $request)
 {
     // 1. Validasi
     $request->validate([
-        'lkjip_file' => 'required|mimes:pdf|max:10240', // Max 10MB
+        'lkjip_file' => 'required|mimes:pdf|max:10240', // Max 10MB (Saran: naikkan dari 4MB ke 10MB)
         'id_triwulan' => 'required|in:TW 1,TW 2,TW 3,TW 4',
     ]);
 
@@ -334,7 +284,7 @@ DB::beginTransaction();
     $latestLkjip = Lkjip::where('id_satker', $idSatker)
         ->where('id_periode', $tahun)
         ->where('id_triwulan', $id_triwulan)
-        ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
+        ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc') 
         ->first();
 
     $id_perubahan = $latestLkjip ? intval($latestLkjip->id_perubahan) + 1 : 0;
@@ -345,14 +295,19 @@ DB::beginTransaction();
     
     // Nama file: lkjip_2024_0_TW_1.pdf
     $fileName = 'lkjip_' . $tahun . '_' . $id_perubahan . '_' . $safeTriwulan . '.pdf';
-    
-    // Folder: uploads/repository/123 (Otomatis dibuat sistem jika belum ada)
+
+    // Folder Tujuan
     $folderPath = 'uploads/repository/' . $idSatker;
 
-    // 4. Proses Upload (Dengan Try-Catch)
+    // 5. Eksekusi Simpan
     try {
-        // Simpan ke Google Drive
-        Storage::disk('google')->putFileAs($folderPath, $file, $fileName);
+        // --- PERBAIKAN DI SINI ---
+        // Langsung gunakan $file tanpa 'new File()'
+        Storage::disk('google')->putFileAs(
+            $folderPath, 
+            $file, 
+            $fileName
+        );
 
         // Simpan Data ke Database
         Lkjip::create([
@@ -360,8 +315,8 @@ DB::beginTransaction();
             'id_periode'   => $tahun,
             'id_triwulan'  => $id_triwulan,
             'id_perubahan' => $id_perubahan,
-            'id_filename'  => $fileName,
-            'id_tglupload' => now()->format('d/m/Y H:i'), // Sesuaikan tipe data DB
+            'id_filename'  => $fileName, 
+            'id_tglupload' => now()->format('d/m/Y h:i A'), 
         ]);
 
         return Redirect::route('pelaporan')->with([
@@ -370,7 +325,6 @@ DB::beginTransaction();
         ]);
 
     } catch (\Exception $e) {
-        // Tangkap error jika koneksi gagal
         return Redirect::back()->withErrors([
             'lkjip_file' => 'Gagal Upload: ' . $e->getMessage()
         ])->withInput();
@@ -394,46 +348,79 @@ DB::beginTransaction();
     //     return redirect()->back()->with('success-lkjip', 'File berhasil dihapus.');
     // }
 
-    public function uploadRapatStaffEka(Request $request)
-    {
-        $request->validate([
-            'id_triwulan' => 'required|in:TW 1,TW 2,TW 3,TW 4',
-            'rapat_file' => 'required|mimes:pdf|max:4096',
+   public function uploadRapatStaffEka(Request $request)
+{
+    // 1. Ambil Session & Validasi
+    $tahun = session('tahun_terpilih');
+    $idSatker = session('id_satker');
+
+    // Cek Session Safety (Opsional tapi disarankan)
+    if (!$tahun || !$idSatker) {
+        return Redirect::back()->withErrors(['msg' => 'Sesi habis, silakan reload halaman.']);
+    }
+
+    $request->validate([
+        'id_triwulan' => 'required|in:TW 1,TW 2,TW 3,TW 4',
+        'rapat_file'  => 'required|mimes:pdf|max:10240', // Max 10MB (Saran: samakan limitnya)
+    ]);
+
+    $triwulan = $request->input('id_triwulan');
+
+    // 2. Logic Versioning (Id Perubahan)
+    $latestRapat = RapatStaffEka::where('id_satker', $idSatker)
+        ->where('id_periode', $tahun)
+        ->where('id_triwulan', $triwulan)
+        ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
+        ->first();
+
+    $id_perubahan = $latestRapat ? intval($latestRapat->id_perubahan) + 1 : 0;
+
+    // 3. Siapkan File & Folder
+    $file = $request->file('rapat_file');
+
+    // Sanitasi Nama File: Ubah "TW 1" jadi "TW_1" agar URL Google Drive aman
+    $safeTriwulan = str_replace(' ', '_', $triwulan);
+    
+    // Format nama: rastaff_2024_0_TW_1.pdf
+    $filename = 'rastaff_' . $tahun . '_' . $id_perubahan . '_' . $safeTriwulan . '.pdf';
+
+    // Folder Tujuan di Google Drive
+    // Library akan otomatis membuat folder ini jika belum ada
+    $folderPath = 'uploads/repository/' . $idSatker;
+
+    // 4. Eksekusi Upload (Try-Catch)
+    try {
+        // --- UPLOAD KE GOOGLE DRIVE ---
+        Storage::disk('google')->putFileAs(
+            $folderPath, 
+            $file, 
+            $filename
+        );
+
+        // --- SIMPAN KE DATABASE ---
+        RapatStaffEka::create([
+            'id_periode'   => $tahun,
+            'id_satker'    => $idSatker,
+            'id_triwulan'  => $triwulan,
+            'id_perubahan' => $id_perubahan,
+            'id_filename'  => $filename,
+            // Pastikan kolom database tipe VARCHAR jika pakai format ini.
+            // Jika tipe DATETIME, ganti jadi: now()
+            'id_tglupload' => now()->format('d/m/Y h:i A'), 
         ]);
 
-        $tahun = session('tahun_terpilih');
-        $idSatker = session('id_satker');
-        $triwulan = $request->input('id_triwulan');
+        return Redirect::route('pelaporan')->with([
+            'success-rastaff' => 'File Rapat Staff EKA berhasil diunggah ke Google Drive.',
+            'active_tab'      => 'rapat-staff-eka'
+        ]);
 
-        // Ambil versi terbaru dari database
-        $latestRapat = RapatStaffEka::where('id_satker', $idSatker)
-            ->where('id_periode', $tahun)
-            ->where('id_triwulan', $triwulan)
-            ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
-            ->first();
-
-        $id_perubahan = $latestRapat ? $latestRapat->id_perubahan + 1 : 0;
-
-        if ($request->hasFile('rapat_file')) {
-            $file = $request->file('rapat_file');
-            $filename = 'rastaff_' . $tahun . '_' . $id_perubahan . '_' . $triwulan . '.pdf';
-            $file->move(base_path('uploads/repository/' . $idSatker), $filename);
-
-            RapatStaffEka::create([
-                'id_periode' => $tahun,
-                'id_satker' => $idSatker,
-                'id_perubahan' => $id_perubahan,
-                'id_filename' => $filename,
-                'id_tglupload' => now()->format('d/m/Y h:i A'),
-                // Format dengan AM/PM
-                'id_triwulan' => $triwulan,
-            ]);
-
-            return Redirect::route('pelaporan')->with(['success-rastaff' => 'File Rapat Staff EKA berhasil diunggah.', 'active_tab' => 'rapat-staff-eka']);
-        }
-
-        return back()->with('error', 'Gagal mengunggah file.');
+    } catch (\Exception $e) {
+        // Tangkap error koneksi / token
+        return Redirect::back()->withErrors([
+            'rapat_file' => 'Gagal Upload ke Google Drive: ' . $e->getMessage()
+        ])->withInput();
     }
+}
     // ... (Method uploadRapatStaffEka() Anda ada di sini)
 
 
@@ -441,147 +428,166 @@ DB::beginTransaction();
      * Memperbarui file dokumen yang ada (dipanggil dari modal edit).
      * Tipe: 'lkjip' atau 'rapat-staff-eka'
      */
-    public function updateFile(Request $request, $type, $id)
-    {
-        $id_satker = session('id_satker');
-        $tahun = session('tahun_terpilih');
+   public function updateFile(Request $request, $type, $id)
+{
+    $id_satker = session('id_satker');
+    $tahun = session('tahun_terpilih');
 
-        // Validasi: file boleh kosong, tapi triwulan wajib ada
-        $validator = Validator::make($request->all(), [
-            'file' => 'nullable|file|mimes:pdf|max:5120', // 5MB max
-            'id_triwulan' => 'required|in:TW 1,TW 2,TW 3,TW 4',
-        ]);
+    // 1. Validasi
+    $validator = Validator::make($request->all(), [
+        'file' => 'nullable|file|mimes:pdf|max:10240', // Saran: Naikkan ke 10MB
+        'id_triwulan' => 'required|in:TW 1,TW 2,TW 3,TW 4',
+    ]);
 
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput()->with('active_tab', $type);
-        }
-
-        // Mapping 'type' dari route ke Model Class dan prefix file
-        $modelMap = [
-            'lkjip' => [
-                'model' => \App\Models\Lkjip::class,
-                'prefix' => 'lkjip'
-            ],
-            'rapat-staff-eka' => [
-                'model' => \App\Models\RapatStaffEka::class,
-                'prefix' => 'rastaff'
-            ],
-        ];
-
-        if (!isset($modelMap[$type])) {
-            return back()->with('error', 'Tipe dokumen tidak valid.')->with('active_tab', $type);
-        }
-
-        $modelClass = $modelMap[$type]['model'];
-        $prefix = $modelMap[$type]['prefix'];
-
-        try {
-            // 1. Temukan record file yang akan diupdate
-            $fileRecord = $modelClass::where('id', $id)
-                                    ->where('id_satker', $id_satker)
-                                    ->first();
-
-            if (!$fileRecord) {
-                return back()->with('error', 'File tidak ditemukan atau Anda tidak berwenang.');
-            }
-
-            $basePath = base_path('uploads/repository/' . $id_satker . '/');
-            $triwulan = $request->input('id_triwulan');
-
-            // 2. Update Triwulan (jika berubah)
-            $fileRecord->id_triwulan = $triwulan;
-
-            // 3. Handle upload file baru (jika ada)
-            if ($request->hasFile('file')) {
-                // A. Hapus file lama dari storage
-                $oldFileName = $fileRecord->id_filename;
-                $oldFilePath = $basePath . $oldFileName;
-                
-                if (File::exists($oldFilePath)) {
-                    File::delete($oldFilePath);
-                }
-
-                // B. Buat nama file baru (versi + 1) dan simpan
-                $newPerubahan = $fileRecord->id_perubahan + 1;
-                $newFileName = $prefix . '_' . $tahun . '_' . $newPerubahan . '_' . $triwulan . '.pdf';
-
-                // Simpan file baru (menggunakan move() seperti di kode Anda)
-                $request->file('file')->move($basePath, $newFileName);
-
-                // C. Siapkan data update untuk DB
-                $fileRecord->id_filename = $newFileName;
-                $fileRecord->id_perubahan = $newPerubahan;
-                $fileRecord->id_tglupload = now()->format('d/m/Y h:i A'); // Sesuai format Anda
-            
-            } 
-            // 4. Cek jika tidak ada file baru DAN triwulan tidak berubah
-            elseif (!$fileRecord->isDirty()) { // isDirty() mengecek apakah ada perubahan atribut model
-                return back()->with('error', 'Tidak ada perubahan. File baru tidak diupload dan triwulan tidak diubah.')
-                             ->with('active_tab', $type);
-            }
-
-            // 5. Eksekusi Update ke Database
-            $fileRecord->save();
-
-            return back()->with('success-update', 'Dokumen berhasil diperbarui.')
-                         ->with('active_tab', $type);
-
-        } catch (\Exception $e) {
-            return back()->with('error', 'Gagal memperbarui file: ' . $e->getMessage())
-                         ->with('active_tab', $type);
-        }
+    if ($validator->fails()) {
+        return back()->withErrors($validator)->withInput()->with('active_tab', $type);
     }
+
+    // 2. Mapping Type ke Model
+    $modelMap = [
+        'lkjip' => [
+            'model' => \App\Models\Lkjip::class,
+            'prefix' => 'lkjip'
+        ],
+        'rapat-staff-eka' => [
+            'model' => \App\Models\RapatStaffEka::class,
+            'prefix' => 'rastaff'
+        ],
+    ];
+
+    if (!isset($modelMap[$type])) {
+        return back()->with('error', 'Tipe dokumen tidak valid.')->with('active_tab', $type);
+    }
+
+    $modelClass = $modelMap[$type]['model'];
+    $prefix = $modelMap[$type]['prefix'];
+
+    try {
+        // 3. Cari Data Lama
+        $fileRecord = $modelClass::where('id', $id)
+            ->where('id_satker', $id_satker)
+            ->first();
+
+        if (!$fileRecord) {
+            return back()->with('error', 'File tidak ditemukan atau akses ditolak.');
+        }
+
+        // Folder di Google Drive
+        $folderPath = 'uploads/repository/' . $id_satker;
+        $triwulanBaru = $request->input('id_triwulan');
+
+        // Update Triwulan di Object Model (belum disimpan ke DB)
+        $fileRecord->id_triwulan = $triwulanBaru;
+
+        // 4. Cek apakah ada file baru yang diupload?
+        if ($request->hasFile('file')) {
+            
+            // A. Hapus File Lama di Google Drive (Jika ada)
+            if ($fileRecord->id_filename) {
+                $pathLama = $folderPath . '/' . $fileRecord->id_filename;
+                // Cek keberadaan file di Drive dulu untuk menghindari error
+                if (Storage::disk('google')->exists($pathLama)) {
+                    Storage::disk('google')->delete($pathLama);
+                }
+            }
+
+            // B. Siapkan Nama File Baru
+            $newPerubahan = intval($fileRecord->id_perubahan) + 1;
+            
+            // Sanitasi Triwulan (TW 1 -> TW_1)
+            $safeTriwulan = str_replace(' ', '_', $triwulanBaru);
+            
+            // Nama file: prefix_tahun_versi_triwulan.pdf
+            $newFileName = $prefix . '_' . $tahun . '_' . $newPerubahan . '_' . $safeTriwulan . '.pdf';
+
+            // C. Upload File Baru ke Google Drive
+            Storage::disk('google')->putFileAs(
+                $folderPath, 
+                $request->file('file'), 
+                $newFileName
+            );
+
+            // D. Update Metadata di Model
+            $fileRecord->id_filename = $newFileName;
+            $fileRecord->id_perubahan = $newPerubahan;
+            // Gunakan now() agar format sesuai database (Y-m-d H:i:s)
+            // Jika kolom di DB adalah VARCHAR, gunakan ->format('d/m/Y h:i A')
+            $fileRecord->id_tglupload = now()->format('d/m/Y h:i A'); 
+        }
+
+        // 5. Cek Perubahan (Dirty Check)
+        // Jika tidak ada file baru DAN triwulan tidak berubah, jangan simpan.
+        if (!$fileRecord->isDirty()) {
+            return back()->with('error', 'Tidak ada perubahan data.')
+                         ->with('active_tab', $type);
+        }
+
+        // 6. Simpan ke Database
+        $fileRecord->save();
+
+        return back()->with('success-update', 'Dokumen berhasil diperbarui.')
+                     ->with('active_tab', $type);
+
+    } catch (\Exception $e) {
+        return back()->with('error', 'Gagal memperbarui file: ' . $e->getMessage())
+                     ->with('active_tab', $type);
+    }
+}
 
     /**
      * Menghapus file dokumen.
      * Tipe: 'lkjip' atau 'rapat-staff-eka'
      */
-    public function deleteFile($type, $id)
-    {
-        $id_satker = session('id_satker');
+   public function deleteFile($type, $id)
+{
+    $id_satker = session('id_satker');
 
-        // Mapping 'type' dari route ke Model Class yang sesuai
-        $modelMap = [
-            'lkjip' => \App\Models\Lkjip::class,
-            'rapat-staff-eka' => \App\Models\RapatStaffEka::class,
-        ];
+    // 1. Mapping Tipe ke Model
+    $modelMap = [
+        'lkjip' => \App\Models\Lkjip::class,
+        'rapat-staff-eka' => \App\Models\RapatStaffEka::class,
+    ];
 
-        if (!isset($modelMap[$type])) {
-            return back()->with('error', 'Tipe dokumen tidak valid.')->with('active_tab', $type);
-        }
-
-        $modelClass = $modelMap[$type];
-
-        try {
-            // 1. Temukan record file
-            $fileRecord = $modelClass::where('id', $id)
-                                    ->where('id_satker', $id_satker)
-                                    ->first();
-
-            if (!$fileRecord) {
-                return back()->with('error', 'File tidak ditemukan atau Anda tidak berwenang.');
-            }
-
-            // 2. Tentukan nama file dan path
-            $basePath = base_path('uploads/repository/' . $id_satker . '/');
-            $fileName = $fileRecord->id_filename;
-            $filePath = $basePath . $fileName;
-
-            // 3. Hapus file dari storage (Gunakan File Facade)
-            if (File::exists($filePath)) {
-                File::delete($filePath);
-            }
-
-            // 4. Hapus record dari database
-            $fileRecord->delete();
-
-            return back()->with('success-delete', 'Dokumen berhasil dihapus.')
-                         ->with('active_tab', $type);
-
-        } catch (\Exception $e) {
-            return back()->with('error', 'Gagal menghapus file: ' . $e->getMessage())
-                         ->with('active_tab', $type);
-        }
+    if (!isset($modelMap[$type])) {
+        return back()->with('error', 'Tipe dokumen tidak valid.')->with('active_tab', $type);
     }
+
+    $modelClass = $modelMap[$type];
+
+    try {
+        // 2. Temukan record di Database
+        $fileRecord = $modelClass::where('id', $id)
+            ->where('id_satker', $id_satker)
+            ->first();
+
+        if (!$fileRecord) {
+            return back()->with('error', 'File tidak ditemukan atau Anda tidak berwenang.');
+        }
+
+        // 3. Tentukan Path di Google Drive
+        // Format path harus sama persis dengan saat upload
+        $googleDrivePath = 'uploads/repository/' . $id_satker . '/' . $fileRecord->id_filename;
+
+        // 4. Hapus File Fisik di Google Drive
+        // Cek dulu apakah file ada di cloud agar tidak error 404
+        if (Storage::disk('google')->exists($googleDrivePath)) {
+            Storage::disk('google')->delete($googleDrivePath);
+        } else {
+            // Opsional: Log warning jika file di DB ada tapi di Drive hilang
+            // \Log::warning("File hantu ditemukan: " . $googleDrivePath);
+        }
+
+        // 5. Hapus Record dari Database
+        // Dilakukan SETELAH hapus file fisik berhasil (atau file fisik memang tidak ada)
+        $fileRecord->delete();
+
+        return back()->with('success-delete', 'Dokumen berhasil dihapus selamanya.')
+                     ->with('active_tab', $type);
+
+    } catch (\Exception $e) {
+        return back()->with('error', 'Gagal menghapus file: ' . $e->getMessage())
+                     ->with('active_tab', $type);
+    }
+}
 
 }
