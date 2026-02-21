@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Bidang;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Storage;
 class SakipwilController extends Controller
 {
     public function index()
@@ -401,5 +402,27 @@ $sortedLkjipTW4 = $satkerIds->mapWithKeys(function($id) use ($lkjipTW4) {
             ->get();
 
         return response()->json($results);
+    }
+    public function viewFile($satker, $filename)
+    {
+        // 1. Tentukan path file di Google Drive
+        // Format path konsisten: uploads/repository/[ID_SATKER]/[FILENAME]
+        $path = 'uploads/repository/' . $satker . '/' . $filename;
+
+        $disk = Storage::disk('google');
+
+        // 2. Cek apakah file ada di Drive
+        if ($disk->exists($path)) {
+            $fileContent = $disk->get($path);
+            $mimeType = $disk->mimeType($path);
+
+            // 3. Return sebagai response stream (untuk dibuka di browser)
+            return response($fileContent, 200)
+                ->header('Content-Type', $mimeType)
+                ->header('Content-Disposition', 'inline; filename="' . $filename . '"');
+        }
+
+        // Jika file tidak ditemukan
+        abort(404, 'File tidak ditemukan di Google Drive.');
     }
 }

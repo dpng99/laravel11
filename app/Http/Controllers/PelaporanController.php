@@ -318,50 +318,41 @@ DB::beginTransaction();
     }
 }
 
-   public function uploadLkjip(Request $request)
+  public function uploadLkjip(Request $request)
 {
-    // 1. Ambil Data Session
-    $tahun = session('tahun_terpilih');
-    $idSatker = session('id_satker');
-
-    // 2. Validasi Input
+    // 1. Validasi
     $request->validate([
-        'lkjip_file' => 'required|mimes:pdf|max:4096', // Max 4MB
+        'lkjip_file' => 'required|mimes:pdf|max:10240', // Max 10MB
         'id_triwulan' => 'required|in:TW 1,TW 2,TW 3,TW 4',
     ]);
 
+    $tahun = session('tahun_terpilih');
+    $idSatker = session('id_satker');
     $id_triwulan = $request->input('id_triwulan');
 
-    // 3. Logic ID Perubahan (Versioning)
+    // 2. Cek Versi Terakhir (Versioning)
     $latestLkjip = Lkjip::where('id_satker', $idSatker)
         ->where('id_periode', $tahun)
         ->where('id_triwulan', $id_triwulan)
-        // Casting ke UNSIGNED agar urutan angka benar (9, 10, 11...)
-        ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc') 
+        ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
         ->first();
 
     $id_perubahan = $latestLkjip ? intval($latestLkjip->id_perubahan) + 1 : 0;
 
-    // 4. Siapkan File
+    // 3. Siapkan Nama File & Folder
     $file = $request->file('lkjip_file');
+    $safeTriwulan = str_replace(' ', '_', $id_triwulan); // Ubah "TW 1" jadi "TW_1"
     
-    // Bersihkan nama file (Ganti spasi 'TW 1' jadi 'TW_1')
-    $safeTriwulan = str_replace(' ', '_', $id_triwulan);
+    // Nama file: lkjip_2024_0_TW_1.pdf
     $fileName = 'lkjip_' . $tahun . '_' . $id_perubahan . '_' . $safeTriwulan . '.pdf';
-
-    // Tentukan Folder Tujuan di Google Drive
-    // Struktur: uploads/repository/[ID_SATKER]
-    // Library Google Drive akan OTOMATIS membuat folder ini jika belum ada.
+    
+    // Folder: uploads/repository/123 (Otomatis dibuat sistem jika belum ada)
     $folderPath = 'uploads/repository/' . $idSatker;
 
-    // 5. Eksekusi Simpan (Gunakan Try-Catch)
+    // 4. Proses Upload (Dengan Try-Catch)
     try {
-        // Upload ke Google Drive
-        Storage::disk('google')->putFileAs(
-            $folderPath, 
-            $file, 
-            $fileName
-        );
+        // Simpan ke Google Drive
+        Storage::disk('google')->putFileAs($folderPath, $file, $fileName);
 
         // Simpan Data ke Database
         Lkjip::create([
@@ -369,19 +360,19 @@ DB::beginTransaction();
             'id_periode'   => $tahun,
             'id_triwulan'  => $id_triwulan,
             'id_perubahan' => $id_perubahan,
-            'id_filename'  => $fileName, 
-            'id_tglupload' => now()->format('d/m/Y h:i A'), // Pastikan kolom DB tipe VARCHAR/TEXT
+            'id_filename'  => $fileName,
+            'id_tglupload' => now()->format('d/m/Y H:i'), // Sesuaikan tipe data DB
         ]);
 
         return Redirect::route('pelaporan')->with([
-            'success-lkjip' => 'File LKJiP berhasil diupload ke Google Drive.', 
+            'success-lkjip' => 'Berhasil upload ke Google Drive!',
             'active_tab' => 'lkjip'
         ]);
 
     } catch (\Exception $e) {
-        // Tangkap error jika gagal connect ke Google
+        // Tangkap error jika koneksi gagal
         return Redirect::back()->withErrors([
-            'lkjip_file' => 'Gagal Upload ke Google Drive: ' . $e->getMessage()
+            'lkjip_file' => 'Gagal Upload: ' . $e->getMessage()
         ])->withInput();
     }
 }

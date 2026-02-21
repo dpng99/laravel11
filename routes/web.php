@@ -186,6 +186,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/aturan/edit/{id}', [AturanController::class, 'edit'])->name('aturan.edit');
     Route::post('/aturan/update/{id}', [AturanController::class, 'update'])->name('aturan.update');
     Route::get('/sakipwil', [SakipwilController::class, 'index'])->name('sakipwil');
+    Route::get('/file/view/{satker}/{filename}', [SakipwilController::class, 'viewFile'])
+    ->name('file.view');
     Route::get('/sakipvalidasi', [SakipvalidasiController::class, 'index'])->name('sakipvalidasi');
     Route::get('/chatsupport', [ChatsupportController::class, 'index'])->name('chatsupport');
     Route::get('/literasi', [LiterasiController::class, 'index'])->name('literasi');
