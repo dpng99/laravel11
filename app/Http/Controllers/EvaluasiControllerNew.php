@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use App\Models\absen_pm;
@@ -158,7 +159,7 @@ private function getTriwulanMapping()
                             ->first();
                         if ($buktiLke && !empty($buktiLke->link_bukti_dukung)) {
                             $status = 'Ada';
-                            $fileLink = asset("uploads/repository/{$idSatker}/{$buktiLke->link_bukti_dukung}");
+                            $fileLink = url("uploads/repository/{$idSatker}/".urldecode($buktiLke->link_bukti_dukung));
                         } 
                         else {
                             // 2. CEK TABEL SUMBER (System Availability)
@@ -243,37 +244,37 @@ private function getTriwulanMapping()
         $extension = $file->getClientOriginalExtension();
         $filename = "{$cleanName}_{$idSatker}_{$tahun}_" . time() . ".{$extension}";
 
-        $destinationPath = public_path("uploads/repository/{$idSatker}");
-        if (!File::exists($destinationPath)) {
-            File::makeDirectory($destinationPath, 0755, true);
+        $folderPath = "uploads/repository/{$idSatker}";
+
+        try {
+            // PERUBAHAN: Upload ke Google Drive
+            Storage::disk('google')->putFileAs($folderPath, $file, $filename);
+
+            // 2. Simpan ke Tabel Utama (bukti_dukung)
+            DB::table('bukti_dukung')->updateOrInsert(
+                [
+                    'id_satker'   => $idSatker,
+                    'id_kriteria' => $request->id_kriteria,
+                ],
+                [
+                    'id_komponen'       => $request->id_komponen,
+                    'id_sub_komponen'   => $request->id_sub_komponen,
+                    'link_bukti_dukung' => $filename,
+                    'tgl_pengisian'     => now()->format('d/m/Y H:i A'),
+                ]
+            );
+
+            // 3. Simpan ke Tabel Sumber (Renstra, Renja, dll)
+            $mapping = $this->getMapping();
+            if (isset($mapping[$kode])) {
+                $this->saveToSourceTable($kode, $filename, $idSatker, $tahun);
+            }
+
+            return back()->with('success', 'File berhasil diupload dan disimpan ke modul terkait.');
+
+        } catch (\Exception $e) {
+            return back()->withErrors(['file' => 'Gagal Upload ke Google Drive: ' . $e->getMessage()]);
         }
-        $file->move($destinationPath, $filename);
-
-        // 2. Simpan ke Tabel Utama (bukti_dukung)
-        DB::table('bukti_dukung')->updateOrInsert(
-            [
-                'id_satker'   => $idSatker,
-                'id_kriteria' => $request->id_kriteria,
-                //'kode_bukti'  => $kode
-            ],
-            [
-                'id_komponen'       => $request->id_komponen,
-                'id_sub_komponen'   => $request->id_sub_komponen,
-                'link_bukti_dukung' => $filename,
-                'tgl_pengisian'     => now()->format('d/m/Y H:i A'),
-            ]
-        );
-
-        // 3. Simpan ke Tabel Sumber (Renstra, Renja, dll) - INI FITUR BARUNYA
-        // Cek apakah kode ini memiliki tabel sumber di getMapping()
-        $mapping = $this->getMapping();
-
-        // Jika ada di mapping dan bukan dokumen manual murni
-        if (isset($mapping[$kode])) {
-            $this->saveToSourceTable($kode, $filename, $idSatker, $tahun);
-        }
-
-        return back()->with('success', 'File berhasil diupload dan disimpan ke modul terkait.');
     }
 
   // ==========================================
@@ -496,20 +497,30 @@ private function saveToSourceTable($kode, $filename, $idSatker, $tahun)
         $id_perubahan = $latestFile ? $latestFile->id_perubahan + 1 : 0;
 
         if ($request->hasFile('tl_lhe_akip_file')) {
-            $file = $request->file('tl_lhe_akip_file');
-            $filename = 'tl_lhe_akip_' . $tahun . '_' . $id_perubahan . '.pdf';
-            $file->move(base_path('uploads/repository/' . $idSatker), $filename);
+           try {
+                $file = $request->file('tl_lhe_akip_file');
+                $filename = 'tl_lhe_akip_' . $tahun . '_' . $id_perubahan . '.pdf';
+                $folderPath = 'uploads/repository/' . $idSatker;
 
-            TlLheAkip::create([
-                'id_periode' => $tahun,
-                'id_satker' => $idSatker,
-                'id_perubahan' => $id_perubahan,
-                'id_filename' => $filename,
-                'id_tglupload' => now()->format('d/m/Y h:i A'),
+                // PERUBAHAN: Upload ke Google Drive
+                Storage::disk('google')->putFileAs($folderPath, $file, $filename);
 
-            ]);
+                TlLheAkip::create([
+                    'id_periode' => $tahun,
+                    'id_satker' => $idSatker,
+                    'id_perubahan' => $id_perubahan,
+                    'id_filename' => $filename,
+                    'id_tglupload' => now()->format('d/m/Y h:i A'),
+                ]);
 
-            return redirect()->route('evaluasi')->with(['success-tllhe' => 'File TL LHE AKIP berhasil diunggah.', 'active_tab' => 'tl-lhe-akip']);
+                return redirect()->route('evaluasi')->with([
+                    'success-tllhe' => 'File TL LHE AKIP berhasil diunggah ke Google Drive.', 
+                    'active_tab' => 'tl-lhe-akip'
+                ]);
+
+            } catch (\Exception $e) {
+                return back()->withErrors(['tl_lhe_akip_file' => 'Gagal Upload ke Google Drive: ' . $e->getMessage()]);
+            }
         }
 
         return back()->with('error', 'Gagal mengunggah file.');
@@ -536,35 +547,34 @@ private function saveToSourceTable($kode, $filename, $idSatker, $tahun)
         $id_perubahan = $latestmonev ? $latestmonev->id_perubahan + 1 : 0;
 
         if ($request->hasFile('monev_file')) {
-            $file = $request->file('monev_file');
+           try {
+                $file = $request->file('monev_file');
+                $safeTriwulan = str_replace(' ', '_', $id_triwulan); // TW 1 -> TW_1
+                $filename = 'renaksieval_' . $tahun . '_' . $id_perubahan . '_' . $safeTriwulan . '.pdf';
+                $folderPath = 'uploads/repository/' . $idSatker;
 
-            // Pastikan folder ada
-            $destination = base_path('uploads/repository/' . $idSatker);
-            if (!file_exists($destination)) {
-                mkdir($destination, 0755, true);
-            }
+                // PERUBAHAN: Upload ke Google Drive
+                Storage::disk('google')->putFileAs($folderPath, $file, $filename);
 
-            $filename = 'renaksieval_' . $tahun . '_' . $id_perubahan . '_' . $id_triwulan . '.pdf';
-            $file->move($destination, $filename);
+                MonevRenaksi::create([
+                    'id_periode' => $tahun,
+                    'id_satker' => $idSatker,
+                    'id_perubahan' => $id_perubahan,
+                    'id_filename' => $filename,
+                    'id_tglupload' => now()->format('d/m/Y h:i A'),
+                    'id_triwulan' => $id_triwulan,
+                ]);
 
-            // Simpan data ke database
-            MonevRenaksi::create([
-                'id_periode' => $tahun,
-                'id_satker' => $idSatker,
-                'id_perubahan' => $id_perubahan,
-                'id_filename' => $filename,
-                'id_tglupload' => now()->format('d/m/Y h:i A'),
-                'id_triwulan' => $id_triwulan,
-            ]);
-
-            return redirect()->route('evaluasi')
-                ->with([
-                    'success-monev' => 'File Monev Renaksi berhasil diunggah.',
+                return redirect()->route('evaluasi')->with([
+                    'success-monev' => 'File Monev Renaksi berhasil diunggah ke Google Drive.',
                     'active_tab' => 'monev-renaksi'
                 ]);
+
+            } catch (\Exception $e) {
+                return back()->withErrors(['monev_file' => 'Gagal Upload ke Google Drive: ' . $e->getMessage()]);
+            }
         }
 
         return back()->with('error', 'Gagal mengunggah file.');
     }
-  }
-
+}
