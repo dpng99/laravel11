@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Bidang;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Redirect;
+use Symfony\Component\HttpFoundation\StreamedResponse; // Untuk streaming file
+use Illuminate\Support\Facades\Storage; // <--- WAJIB: Tambahkan ini
 class SakipwilController extends Controller
 {
     public function index()
