@@ -19,7 +19,8 @@ const FileLink = ({ fileData, satkerId, fileName }) => {
         if (!link) return <CancelIcon color="error" fontSize="small" />;
         
         return (
-            <a href={`/uploads/repository/${satkerId}/${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer">
+           // 🔽 PERUBAHAN DI SINI: Arahkan ke route /file/view 🔽
+            <a href={`/file/view/${satkerId}/${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer">
                 <CheckCircleIcon color="success" />
             </a>
         );

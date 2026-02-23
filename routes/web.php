@@ -186,6 +186,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/aturan/edit/{id}', [AturanController::class, 'edit'])->name('aturan.edit');
     Route::post('/aturan/update/{id}', [AturanController::class, 'update'])->name('aturan.update');
     Route::get('/sakipwil', [SakipwilController::class, 'index'])->name('sakipwil');
+    Route::get('/file/view/{satker}/{filename}', [SakipwilController::class, 'viewFile'])
+    ->name('file.view');
     Route::get('/sakipvalidasi', [SakipvalidasiController::class, 'index'])->name('sakipvalidasi');
     Route::get('/chatsupport', [ChatsupportController::class, 'index'])->name('chatsupport');
     Route::get('/literasi', [LiterasiController::class, 'index'])->name('literasi');
@@ -205,18 +207,32 @@ Route::middleware(['auth'])->group(function () {
 
 Route::get('/upload-drive', [GoogleDriveController::class, 'upload']);
 Route::get('/debug-google', function () {
-    // Mengambil konfigurasi disk google yang sudah dimuat Laravel
-    $config = config('filesystems.disks.google');
+$config = config('filesystems.disks.google');
+    
+    // Kita tembak API Google langsung secara manual (Bypass library)
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, 'https://oauth2.googleapis.com/token');
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+        'client_id' => $config['clientId'],
+        'client_secret' => $config['clientSecret'],
+        'refresh_token' => $config['refreshToken'],
+        'grant_type' => 'refresh_token',
+    ]));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    
+    // Abaikan SSL sementara HANYA untuk tes ini
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
+    
+    $response = curl_exec($ch);
+    $error = curl_error($ch);
+    curl_close($ch);
 
-    return [
-        'status' => 'Cek Konfigurasi',
-        'clientId_terisi' => !empty($config['clientId']), // Harusnya TRUE
-        'clientSecret_terisi' => !empty($config['clientSecret']), // Harusnya TRUE
-        'refreshToken_terisi' => !empty($config['refreshToken']), // Harusnya TRUE
-        
-        // Tampilkan config mentah untuk memastikan key-nya benar (clientId bukan client_id)
-        'config_raw' => $config, 
-    ];
+    return response()->json([
+        'Status' => 'Tes Tukar Token ke Google',
+        'cURL_Error' => $error ?: 'Aman, tidak ada error jaringan',
+        'Balasan_Dari_Google' => json_decode($response, true)
+    ]);
 });
 
 

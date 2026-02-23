@@ -33,7 +33,7 @@ services:
         volumes:
             - '.:/var/www/html'
         # PERBAIKAN: Syntax command array yang lebih rapi & pasti jalan
-        command: ["npm", "run", "dev", "--", "--host"]
+        command: sh -c "npm install && npm run dev -- --host"
         ports:
             - '5173:5173'
         networks:
@@ -44,7 +44,7 @@ services:
         image: 'mysql:8.0'
         container_name: sukaphorn_db
         environment:
-            MYSQL_USER: root
+           # MYSQL_USER: root
             MYSQL_ROOT_PASSWORD: root
             MYSQL_DATABASE: panevkejaksaan_prosakip
         ports:

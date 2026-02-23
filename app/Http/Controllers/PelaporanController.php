@@ -270,19 +270,17 @@ class PelaporanController extends Controller
 
  public function uploadLkjip(Request $request)
 {
-    // 1. Ambil Data Session
-    $tahun = session('tahun_terpilih');
-    $idSatker = session('id_satker');
-
-    // 2. Validasi Input
+    // 1. Validasi
     $request->validate([
         'lkjip_file' => 'required|mimes:pdf|max:10240', // Max 10MB (Saran: naikkan dari 4MB ke 10MB)
         'id_triwulan' => 'required|in:TW 1,TW 2,TW 3,TW 4',
     ]);
 
+    $tahun = session('tahun_terpilih');
+    $idSatker = session('id_satker');
     $id_triwulan = $request->input('id_triwulan');
 
-    // 3. Logic ID Perubahan (Versioning)
+    // 2. Cek Versi Terakhir (Versioning)
     $latestLkjip = Lkjip::where('id_satker', $idSatker)
         ->where('id_periode', $tahun)
         ->where('id_triwulan', $id_triwulan)
@@ -291,11 +289,11 @@ class PelaporanController extends Controller
 
     $id_perubahan = $latestLkjip ? intval($latestLkjip->id_perubahan) + 1 : 0;
 
-    // 4. Siapkan File
+    // 3. Siapkan Nama File & Folder
     $file = $request->file('lkjip_file');
+    $safeTriwulan = str_replace(' ', '_', $id_triwulan); // Ubah "TW 1" jadi "TW_1"
     
-    // Bersihkan nama file (Ganti spasi 'TW 1' jadi 'TW_1')
-    $safeTriwulan = str_replace(' ', '_', $id_triwulan);
+    // Nama file: lkjip_2024_0_TW_1.pdf
     $fileName = 'lkjip_' . $tahun . '_' . $id_perubahan . '_' . $safeTriwulan . '.pdf';
 
     // Folder Tujuan
@@ -322,13 +320,13 @@ class PelaporanController extends Controller
         ]);
 
         return Redirect::route('pelaporan')->with([
-            'success-lkjip' => 'File LKJiP berhasil diupload ke Google Drive.', 
+            'success-lkjip' => 'Berhasil upload ke Google Drive!',
             'active_tab' => 'lkjip'
         ]);
 
     } catch (\Exception $e) {
         return Redirect::back()->withErrors([
-            'lkjip_file' => 'Gagal Upload ke Google Drive: ' . $e->getMessage()
+            'lkjip_file' => 'Gagal Upload: ' . $e->getMessage()
         ])->withInput();
     }
 }
