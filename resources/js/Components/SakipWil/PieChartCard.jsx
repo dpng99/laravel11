@@ -7,10 +7,15 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function PieChartCard({ title, dataList }) {
-    // Hitung data terisi vs belum
-    const terisi = dataList ? dataList.filter(item => item).length : 0;
-    const belumTerisi = dataList ? dataList.length - terisi : 0;
+// 1. Pastikan dataList diubah menjadi Array (mengambil nilai/values-nya saja)
+    const safeDataList = dataList 
+        ? (Array.isArray(dataList) ? dataList : Object.values(dataList)) 
+        : [];
 
+    // 2. Hitung data terisi vs belum menggunakan array yang sudah aman
+    const terisi = safeDataList.filter(item => item !== null && item !== '').length;
+    const belumTerisi = safeDataList.length - terisi;
+    
     const data = {
         labels: ['Terisi', 'Belum Terisi'],
         datasets: [{

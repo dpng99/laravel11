@@ -193,7 +193,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/literasi', [LiterasiController::class, 'index'])->name('literasi');
     Route::get('/faq', [FaqController::class, 'index'])->name('faq');
     
-    Route::controller(UbahpasswordController::class)->group(function () {
+    Route::controller(UbahpasswordController::class)->group(function () {   
         Route::get('/ubahpassword', 'index')->name('ubahpassword');
         Route::put('/password/update', 'updatePassword')->name('password.update');
     });

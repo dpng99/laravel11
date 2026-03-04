@@ -55,29 +55,35 @@ class PelaporanController extends Controller
         $data = [];
 
         if ($id_bidang) {
-            $indikators = Indikator::where('id_bidang', $id_bidang)->get();
+        $indikators = Indikator::where('id_bidang', $id_bidang)->get();
+        $indikatorIds = $indikators->pluck('id'); // Ambil array ID indikator
 
-            foreach ($indikators as $indikator) {
-                $subIndikators = explode(',', $indikator->sub_indikator);
-                $pengukuranData = Pengukuran::where('indikator_id', $indikator->id)
-                    ->where('id_satker', $idSatker)
-                    ->where('tahun', $tahun)
-                    ->get();
+        // 🔥 BEBAS N+1: Tarik semua Pengukuran HANYA DENGAN 1 QUERY
+        $allPengukuran = Pengukuran::whereIn('indikator_id', $indikatorIds)
+            ->where('id_satker', $idSatker)
+            ->where('tahun', $tahun)
+            ->get()
+            ->groupBy('indikator_id'); // Kelompokkan berdasarkan ID indikator
 
-                $data[$indikator->id] = [
-                    'nama' => $indikator->indikator_nama,
-                    'sub' => []
-                ];
+        foreach ($indikators as $indikator) {
+            $subIndikators = explode(',', $indikator->sub_indikator);
+            
+            // Ambil data pengukuran hanya dari koleksi (Bukan dari DB lagi)
+            $pengukuranData = isset($allPengukuran[$indikator->id]) ? $allPengukuran[$indikator->id] : collect([]);
 
-                foreach ($subIndikators as $sub) {
-                    $sub = trim($sub);
-                    $data[$indikator->id]['sub'][$sub] = $pengukuranData
-                        ->where('sub_indikator', $sub)
-                        ->where('id_satker', $idSatker)
-                        ->keyBy('bulan');
-                }
+            $data[$indikator->id] = [
+                'nama' => $indikator->indikator_nama,
+                'sub' => []
+            ];
+
+            foreach ($subIndikators as $sub) {
+                $sub = trim($sub);
+                $data[$indikator->id]['sub'][$sub] = $pengukuranData
+                    ->where('sub_indikator', $sub)
+                    ->keyBy('bulan'); 
             }
         }
+    }
 
         return Inertia::render('Kelola/Pelaporan', [
             'tahun' => $tahun, 
