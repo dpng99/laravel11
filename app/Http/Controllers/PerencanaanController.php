@@ -485,7 +485,7 @@ public function uploadPK(Request $request)
 
     // Cek id_perubahan terakhir
     $latestPK = Pk::where('id_satker', $idSatker)
-        ->where('id_periode', $tahun)
+        ->where('id_8periode', $tahun)
         ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
         ->first();
 
@@ -495,8 +495,10 @@ public function uploadPK(Request $request)
     // Upload file ke folder public/uploads/repository/{id_satker}
     $file = $request->file('pk_file');
     $fileName = 'pk_' . $tahun . '_' . $id_perubahan . '.pdf';
-    $file->move(base_path('uploads/repository/' . $idSatker), $fileName);
+    $folderPath = 'uploads/repository/' . $idSatker;
 
+    try {
+    Storage::disk('google')->putFileAs($folderPath, $file, $fileName);
     // Simpan ke database
     Pk::create([
         'id_satker'    => $idSatker,
@@ -507,6 +509,10 @@ public function uploadPK(Request $request)
     ]);
 
     return Redirect::route('perencanaan')->with('success-pk-file','File PK berhasil diupload!')->with('active_tab', 'perjanjian-kinerja');
+    } catch (\Exception $e) {
+        return Redirect::back()->withErrors(['pk_file' => 'Gagal upload file: ' . $e->getMessage()]);
+    }
+   
 }
 // ... (Method uploadPK Anda yang ada)
 

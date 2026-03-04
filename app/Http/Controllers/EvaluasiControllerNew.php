@@ -155,7 +155,6 @@ private function getTriwulanMapping()
                         $buktiLke = DB::table('bukti_dukung')
                             ->where('id_satker', $idSatker)
                             ->where('id_kriteria', $kriteria->kode)
-                            //->where('kode_bukti', $kode)
                             ->first();
                         if ($buktiLke && !empty($buktiLke->link_bukti_dukung)) {
                             $status = 'Ada';
@@ -458,7 +457,7 @@ private function saveToSourceTable($kode, $filename, $idSatker, $tahun)
         elseif (in_array($kode, [21, 7, 9, 19])) { 
             $tableName = $query->getModel()->getTable();
             if (Schema::hasColumn($tableName, 'id_perubahan')) {
-    return $query->orderBy('id_perubahan', 'desc')->first();
+            return $query->orderBy('id_perubahan', 'desc')->first();
             } else {
                 // Jika tidak punya versi perubahan, ambil yang terakhir diinput (atau default)
                 return $query->latest()->first(); 
