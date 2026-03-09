@@ -53,7 +53,7 @@ export default function DipaTab({ dipaFiles, flashMessage, tahun, idSatker, onEd
             preserveScroll: true,
         });
     };
-
+    const safeFiles = dipaFiles || [];
     return (
         <Box>
             <Typography variant="h5" sx={{ mb: 1, fontWeight: 'bold' }}>Daftar Isian Pelaksanaan Anggaran (DIPA)</Typography>
@@ -138,10 +138,10 @@ export default function DipaTab({ dipaFiles, flashMessage, tahun, idSatker, onEd
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {dipaFiles.length === 0 ? (
+                        {safeFiles.length === 0 ? (
                             <TableRow><TableCell colSpan={8} align="center">Belum ada data DIPA.</TableCell></TableRow>
                         ) : (
-                            dipaFiles.map((file, index) => (
+                            safeFiles.map((file, index) => (
                                 <TableRow key={file.id} hover>
                                     <TableCell>{index + 1}</TableCell>
                                     <TableCell>

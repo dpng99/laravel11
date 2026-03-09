@@ -1,4 +1,3 @@
-
 // resources/js/Components/Perencanaan/PerjanjianKinerjaTab.jsx
 import React, {useState} from 'react';
 import { useForm, usePage } from '@inertiajs/react';
@@ -7,7 +6,7 @@ import {
     Grid, Card, CardContent, TextField, Button, Alert, Collapse 
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import FileUploadSection from './FileUploadSection'; // Impor ulang komponen file upload
+import FileUploadSection from './FileUploadSection'; 
 
 // Komponen Form Target Per Indikator
 function IndikatorTargetForm({ indikator, targetData }) {
@@ -24,7 +23,7 @@ function IndikatorTargetForm({ indikator, targetData }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        post('/target/store', { // URL dari Blade
+        post('/target/store', { 
             preserveScroll: true,
         });
     };
@@ -48,10 +47,7 @@ function IndikatorTargetForm({ indikator, targetData }) {
                             fullWidth
                             margin="normal"
                         />
-                        {/* Anda bisa tambahkan input Triwulan di sini
-                            jika logikanya diaktifkan kembali
-                        */}
-                        <Button type="submit" variant="contained" color="success" fullWidth disabled={processing}>
+                        <Button type="submit" variant="contained" color="success" fullWidth disabled={processing} sx={{ mt: 2 }}>
                             {processing ? 'Menyimpan...' : 'Simpan'}
                         </Button>
                     </Box>
@@ -60,7 +56,6 @@ function IndikatorTargetForm({ indikator, targetData }) {
         </Card>
     );
 }
-
 
 export default function PerjanjianKinerjaTab({ 
     pkFiles, flashMessage, flashMessageTarget, tahun, idSatker, onEditClick, 
@@ -71,9 +66,13 @@ export default function PerjanjianKinerjaTab({
     const levelSakip = parseInt(auth.user?.id_sakip_level || 0, 10);
     const [showFlash, setShowFlash] = useState(true);
 
+    // 🔥 VARIABEL PENGAMAN: Jika undefined dari controller, otomatis diubah menjadi Array/Object kosong
+    const safeBidangs = bidangs || [];
+    const safeIndikators = indikators || [];
+    const safeTargets = targets || {};
+
     return (
         <Box>
-            {/* 1. Flash Message untuk Target */}
             <Collapse in={showFlash && !!flashMessageTarget}>
                 <Alert severity="success" onClose={() => setShowFlash(false)} sx={{ mb: 2 }}>
                     {flashMessageTarget}
@@ -85,11 +84,10 @@ export default function PerjanjianKinerjaTab({
                 <Typography>Pengisian Target Perjanjian Kinerja</Typography>
             </Paper>
 
-            {/* 2. Bagian Upload File PK */}
             <FileUploadSection
                 title="UPLOAD File Perjanjian Kinerja"
                 description={tahun != 2024 ? "Cukup 1 File saja yang memuat PK seluruh pejabat" : ""}
-                uploadRoute="/upload-pk"
+                uploadRoute="/perencanaan/upload/pk"
                 fileInputName="pk_file"
                 files={pkFiles}
                 flashMessage={flashMessage}
@@ -98,20 +96,22 @@ export default function PerjanjianKinerjaTab({
                 fileNamePrefix="PK"
                 deleteRoutePrefix={deleteRoutePrefix}
                 onEditClick={onEditClick}
-                // Sembunyikan form jika tahun 2024
                 hideForm={tahun == 2024} 
             />
 
-            {/* 3. Bagian Accordion Form Target (hanya jika tahun != 2024) */}
+            {/* Bagian Accordion Form Target menggunakan Array Pengaman */}
             {tahun != 2024 && (
                 <Box sx={{ mt: 4 }}>
-                    {bidangs.map((bidang, index) => {
-                        // Filter indikator yang sesuai untuk bidang ini
-                        const relevantIndikators = indikators.filter(ind => {
+                    {safeBidangs.map((bidang, index) => {
+                        
+                        // Gunakan safeIndikators agar tidak error saat .filter
+                        const relevantIndikators = safeIndikators.filter(ind => {
                             if (ind.link !== bidang.rumpun) return false;
-                            if (!ind.tahun.includes(String(tahun))) return false;
                             
-                            // Logika lingkup dari Blade
+                            // Amankan pencarian string tahun
+                            const tahunString = String(tahun);
+                            if (ind.tahun && typeof ind.tahun === 'string' && !ind.tahun.includes(tahunString)) return false;
+                            
                             switch (levelSakip) {
                                 case 1: return [0, 1].includes(ind.lingkup);
                                 case 2: return [0, 2, 5, 7].includes(ind.lingkup);
@@ -136,7 +136,7 @@ export default function PerjanjianKinerjaTab({
                                                 <Grid item xs={12} md={6} key={indikator.id}>
                                                     <IndikatorTargetForm
                                                         indikator={indikator}
-                                                        targetData={targets[indikator.id]} // Kirim data target
+                                                        targetData={safeTargets[indikator.id]} // Gunakan safeTargets
                                                     />
                                                 </Grid>
                                             ))}
@@ -150,7 +150,6 @@ export default function PerjanjianKinerjaTab({
                     })}
                 </Box>
             )}
-
         </Box>
     );
 }

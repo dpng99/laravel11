@@ -1,143 +1,81 @@
 <?php
+
 namespace App\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
-use App\Models\absen_pm;
-use App\Models\ba_pleno;
-use App\Models\ba_praeval;
-use App\Models\DataLke1;
-use App\Models\Dipa;
-use App\Models\Iku;
-use App\Models\lhe_2023;
-use App\Models\LheAkip;
-use App\Models\lke_subkomponens;
-use Dflydev\DotAccessData\Data;
-use App\Models\lke_buktidukung;
-use App\Models\lke_komponen;
-use App\Models\Lkjip;
-use App\Models\memo_datakinerja;
-use App\Models\memo_lkjip;
-use App\Models\MonevRenaksi;
-use App\Models\nodis_eval_sakip;
-use App\Models\nodis_p_sakip;
-use App\Models\notulensi_pm;
-use App\Models\Pk;
-use App\Models\PokinRanwal;
-use App\Models\Renaksi;
-use App\Models\Renja;
-use App\Models\Renstra;
-use App\Models\reward_punish;
-use App\Models\Rkakl;
-use App\Models\sampel_rekom;
-use App\Models\sample_skp;
-use App\Models\sk_pk;
-use App\Models\sk_pm;
-use App\Models\tar_pm;
-use App\Models\TlLheAkip;
-use App\Models\tar_lkjip;
-use App\Models\ss_perencanaan;
-use App\Models\ss_laporanweb;
-use App\Models\ss_laporanapp;
-use App\Models\nodis_datakinerja;
-use App\Models\RapatStaffEka;
+use Illuminate\Support\Facades\Storage; // Wajib: Google Drive
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\File;
+
+// Pastikan semua Model di-import seperti aslinya
+use App\Models\{
+    absen_pm, ba_pleno, ba_praeval, DataLke1, Dipa, Iku, lhe_2023, LheAkip, 
+    lke_subkomponens, lke_buktidukung, lke_komponen, Lkjip, memo_datakinerja, 
+    memo_lkjip, MonevRenaksi, nodis_eval_sakip, nodis_p_sakip, notulensi_pm, 
+    Pk, PokinRanwal, Renaksi, Renja, Renstra, reward_punish, Rkakl, sampel_rekom, 
+    sample_skp, sk_pk, sk_pm, tar_pm, TlLheAkip, tar_lkjip, ss_perencanaan, 
+    ss_laporanweb, ss_laporanapp, nodis_datakinerja, RapatStaffEka
+};
+
 class EvaluasiControllerNew extends Controller
 {
-    // ==========================================
-    // 1. KONFIGURASI MAPPING
-    // ==========================================
-
     private function getMapping()
     {
         return [
-            1 => Renstra::class, 
-            2 => Renja::class, 
-            3 => Renaksi::class, 
-            4 => Rkakl::class,
-            5 => Dipa::class, 
-            6 => Pk::class, 
-            7 => Pk::class, 
-            8 => Iku::class, 
-            9 => Iku::class,
-            10 => Lkjip::class, 
-            11 => Lkjip::class, 
-            12 => LheAkip::class,
-            13 => RapatStaffEka::class, 
-            14 => RapatStaffEka::class,
-            15 => LheAkip::class, 
-            16 => LheAkip::class, 
-            17 => TlLheAkip::class,
-            18 => MonevRenaksi::class, 
-            19 => MonevRenaksi::class, 
-            20 => PokinRanwal::class,
-            21 => Renstra::class, 
-            22 => Lkjip::class, 
-            23 => sample_skp::class,
-            24 => sk_pm::class, 
-            25 => sk_pk::class, 
-            26 => absen_pm::class,
-            27 => notulensi_pm::class, 
-            28 => nodis_p_sakip::class,
-            29 => nodis_eval_sakip::class,
-            30 => memo_datakinerja::class, 
-            31 => nodis_datakinerja::class, 
-            32 => reward_punish::class,
-            33 => sampel_rekom::class, 
-            34 => ss_perencanaan::class, 
-            35 => ss_laporanweb::class,
-            36 => ss_laporanapp::class, 
-            37 => tar_lkjip::class, 
-            38 => tar_lkjip::class,
-            39 => memo_lkjip::class, 
-            40 => memo_lkjip::class, 
-            41 => tar_pm::class,
-            42 => ba_praeval::class, 
-            43 => ba_pleno::class, 
-            44 => LheAkip::class, 
+            1 => Renstra::class, 2 => Renja::class, 3 => Renaksi::class, 4 => Rkakl::class,
+            5 => Dipa::class, 6 => Pk::class, 7 => Pk::class, 8 => Iku::class, 9 => Iku::class,
+            10 => Lkjip::class, 11 => Lkjip::class, 12 => LheAkip::class,
+            13 => RapatStaffEka::class, 14 => RapatStaffEka::class,
+            15 => LheAkip::class, 16 => LheAkip::class, 17 => TlLheAkip::class,
+            18 => MonevRenaksi::class, 19 => MonevRenaksi::class, 20 => PokinRanwal::class,
+            21 => Renstra::class, 22 => Lkjip::class, 23 => sample_skp::class,
+            24 => sk_pm::class, 25 => sk_pk::class, 26 => absen_pm::class,
+            27 => notulensi_pm::class, 28 => nodis_p_sakip::class, 29 => nodis_eval_sakip::class,
+            30 => memo_datakinerja::class, 31 => nodis_datakinerja::class, 32 => reward_punish::class,
+            33 => sampel_rekom::class, 34 => ss_perencanaan::class, 35 => ss_laporanweb::class,
+            36 => ss_laporanapp::class, 37 => tar_lkjip::class, 38 => tar_lkjip::class,
+            39 => memo_lkjip::class, 40 => memo_lkjip::class, 41 => tar_pm::class,
+            42 => ba_praeval::class, 43 => ba_pleno::class, 44 => LheAkip::class, 
         ];
     }
 
-
-private function getTriwulanMapping()
+    private function getTriwulanMapping()
     {
         return [
-            10 => 'TW 1', 11 => 'TW 2', 12 => 'TW 4',
-            13 => 'TW 1', 14 => 'TW 2',
-            18 => 'TW 1', 19 => 'TW 2',
-            37 => 'TW 1', 38 => 'TW 2',
-            39 => 'TW 1', 40 => 'TW 2',
+            10 => 'TW 1', 11 => 'TW 2', 12 => 'TW 4', 13 => 'TW 1', 14 => 'TW 2',
+            18 => 'TW 1', 19 => 'TW 2', 37 => 'TW 1', 38 => 'TW 2', 39 => 'TW 1', 40 => 'TW 2',
         ];
     }
 
-
-
     // ==========================================
-    // 2. INDEX (DENGAN ELOQUENT RELATIONSHIP)
+    // 🚀 INDEX SUPER OPTIMIZED
     // ==========================================
-
     public function index()
     {
-        if (!session()->has('tahun_terpilih')) {
-            return redirect()->route('pilih.tahun');
-        }
+        if (!session()->has('tahun_terpilih')) return redirect()->route('pilih.tahun');
 
         $tahun = session('tahun_terpilih');
         $idSatker = session('id_satker');
 
         $lkeHierarki = lke_komponen::with(['subKomponens.kriterias.buktiDukungs'])
-                        ->orderBy('id', 'asc')
-                        ->get();
+                        ->orderBy('id', 'asc')->get();
 
         $modelMapping = $this->getMapping();
         $triwulanMapping = $this->getTriwulanMapping();
         
-        // Hapus variabel $manualCodes karena sudah tidak dipakai
+        // 🔥 OPTIMASI 1: Tarik SEMUA bukti_dukung sekaligus (Cuma 1 Query!)
+        // Daripada query ratusan kali di dalam loop, kita panggil 1x dan jadikan Dictionary
+        $allBuktiDukung = DB::table('bukti_dukung')
+                            ->where('id_satker', $idSatker)
+                            ->get()
+                            ->keyBy('id_kriteria'); 
 
+        // 🔥 OPTIMASI 2: Cache ketersediaan sistem dalam memori sementara
+        // Agar model yang sama (misal Renstra) tidak di-query berulang kali
+        $sysAvailabilityCache = [];
         $lkeDataFlat = collect([]);
 
         foreach ($lkeHierarki as $komponen) {
@@ -146,37 +84,31 @@ private function getTriwulanMapping()
                     $buktiList = [];
                     foreach ($kriteria->buktiDukungs as $buktiRef) {
                         $kode = $buktiRef->id;
-                        $namaDokumen = $buktiRef->dokumen;
                         $status = 'Tidak Ada';
                         $fileLink = null;
-                        // 1. CEK BUKTI DUKUNG (Prioritas Utama)
-                        $buktiLke = DB::table('bukti_dukung')
-                            ->where('id_satker', $idSatker)
-                            ->where('id_kriteria', $kriteria->kode)
-                            ->first();
+
+                        // Ambil dari Dictionary Memori (Jauh lebih cepat dari DB query)
+                        $buktiLke = $allBuktiDukung->get($kriteria->kode);
+
                         if ($buktiLke && !empty($buktiLke->link_bukti_dukung)) {
                             $status = 'Ada';
-                            $fileLink = url("uploads/repository/{$idSatker}/".urldecode($buktiLke->link_bukti_dukung));
-                        } 
-                        else {
-                            // 2. CEK TABEL SUMBER (System Availability)
-                            // Sekarang SEMUA kode dicek, asalkan terdaftar di mapping
+                            $fileLink = url("/file/view/{$idSatker}/" . urlencode($buktiLke->link_bukti_dukung));
+                        } else {
                             if (isset($modelMapping[$kode])) {
-                                // Fungsi checkSystemAvailability kita sudah "Foolproof"
-                                // Dia akan mengecek kolom secara dinamis, jadi aman untuk tabel SK, Reward, dll.
-                                $check = $this->checkSystemAvailability($kode, $idSatker, $tahun, $modelMapping, $triwulanMapping);
+                                // Eksekusi Query Sistem HANYA JIKA belum ada di cache memori
+                                if (!array_key_exists($kode, $sysAvailabilityCache)) {
+                                    $sysAvailabilityCache[$kode] = $this->checkSystemAvailability($kode, $idSatker, $tahun, $modelMapping, $triwulanMapping);
+                                }
                                 
-                                if ($check) {
+                                if ($sysAvailabilityCache[$kode]) {
                                     $status = 'Tersedia di Sistem (Belum Verif)';
-                                }else {
-                                    $status = 'Tidak Ada';
                                 }
                             }
                         }
 
                         $buktiList[] = [
                             'kode_bukti' => $kode,
-                            'nama_dokumen' => $namaDokumen,
+                            'nama_dokumen' => $buktiRef->dokumen,
                             'status' => $status,
                             'file_link' => $fileLink,
                         ];
@@ -197,14 +129,17 @@ private function getTriwulanMapping()
             }
         }
 
-        $lkeGrouped = $lkeDataFlat->groupBy('id_komponen')->map(function ($subItems) {
-            return $subItems->groupBy('id_sub_komponen');
-        });
+        $lkeGrouped = $lkeDataFlat->groupBy('id_komponen')->map(fn($subItems) => $subItems->groupBy('id_sub_komponen'));
 
-        // Query tambahan untuk tab lain (biarkan seperti adanya)
-        $lheAkipFiles = LheAkip::where('id_satker', $idSatker)->where('id_periode', $tahun)->orderByDesc('id')->get();
-        $tlLheAkipFiles = TlLheAkip::where('id_satker', $idSatker)->where('id_periode', $tahun)->orderByDesc('id')->get();
-        $monevRenaksiFiles = MonevRenaksi::where('id_periode', $tahun)->where('id_satker', $idSatker)->orderByDesc('id_perubahan')->get();
+        // 🔥 OPTIMASI 3: Hanya select kolom yang dipakai agar irit RAM
+        $lheAkipFiles = LheAkip::select('id', 'id_filename', 'id_periode', 'id_perubahan', 'id_tglupload')
+            ->where('id_satker', $idSatker)->where('id_periode', $tahun)->orderByDesc('id')->get();
+            
+        $tlLheAkipFiles = TlLheAkip::select('id', 'id_filename', 'id_periode', 'id_perubahan', 'id_tglupload')
+            ->where('id_satker', $idSatker)->where('id_periode', $tahun)->orderByDesc('id')->get();
+            
+        $monevRenaksiFiles = MonevRenaksi::select('id', 'id_filename', 'id_periode', 'id_perubahan', 'id_triwulan', 'id_tglupload')
+            ->where('id_satker', $idSatker)->where('id_periode', $tahun)->orderByDesc('id_perubahan')->get();
 
         return Inertia::render('Kelola/Evaluasi', [
             'tahun' => $tahun,
@@ -216,10 +151,9 @@ private function getTriwulanMapping()
         ]);
     }
 
- // ==========================================
-    // 3. UPLOAD (SIMPAN KE BUKTI_DUKUNG + TABEL SUMBER)
     // ==========================================
-
+    // 💾 UPLOAD BUKTI DUKUNG (Google Drive)
+    // ==========================================
     public function upload(Request $request)
     {
         $request->validate([
@@ -231,347 +165,175 @@ private function getTriwulanMapping()
 
         $idSatker = session('id_satker');
         $tahun = session('tahun_terpilih');
-        $file = $request->file('file');
         $kode = (int)$request->kode_bukti;
 
-        // 1. Proses Fisik File
         $dokRef = lke_buktidukung::find($kode);
         $cleanName = $dokRef ? preg_replace('/[^A-Za-z0-9]/', '_', $dokRef->dokumen) : 'Dokumen';
-        $cleanName = substr($cleanName, 0, 40);
-        $extension = $file->getClientOriginalExtension();
-        $filename = "{$cleanName}_{$idSatker}_{$tahun}_" . time() . ".{$extension}";
-
+        $filename = substr($cleanName, 0, 40) . "_{$idSatker}_{$tahun}_" . time() . "." . $request->file('file')->getClientOriginalExtension();
         $folderPath = "uploads/repository/{$idSatker}";
 
         try {
-            // PERUBAHAN: Upload ke Google Drive
-            Storage::disk('google')->putFileAs($folderPath, $file, $filename);
+            Storage::disk('google')->putFileAs($folderPath, $request->file('file'), $filename);
 
-            // 2. Simpan ke Tabel Utama (bukti_dukung)
             DB::table('bukti_dukung')->updateOrInsert(
-                [
-                    'id_satker'   => $idSatker,
-                    'id_kriteria' => $request->id_kriteria,
-                ],
-                [
-                    'id_komponen'       => $request->id_komponen,
-                    'id_sub_komponen'   => $request->id_sub_komponen,
-                    'link_bukti_dukung' => $filename,
-                    'tgl_pengisian'     => now()->format('d/m/Y H:i A'),
-                ]
+                ['id_satker' => $idSatker, 'id_kriteria' => $request->id_kriteria],
+                ['id_komponen' => $request->id_komponen, 'id_sub_komponen' => $request->id_sub_komponen, 'link_bukti_dukung' => $filename, 'tgl_pengisian' => now()->format('d/m/Y H:i A')]
             );
 
-            // 3. Simpan ke Tabel Sumber (Renstra, Renja, dll)
-            $mapping = $this->getMapping();
-            if (isset($mapping[$kode])) {
+            if (isset($this->getMapping()[$kode])) {
                 $this->saveToSourceTable($kode, $filename, $idSatker, $tahun);
             }
 
-            return back()->with('success', 'File berhasil diupload dan disimpan ke modul terkait.');
-
+            return back()->with('success', 'File berhasil diupload ke Google Drive.');
         } catch (\Exception $e) {
-            return back()->withErrors(['file' => 'Gagal Upload ke Google Drive: ' . $e->getMessage()]);
+            return back()->withErrors(['file' => 'Gagal Upload: ' . $e->getMessage()]);
         }
     }
 
-  // ==========================================
-    // 4. VERIFIKASI (PENGECEKAN KE SISTEM)
     // ==========================================
-
+    // ✅ VERIFIKASI (TARIK DARI SISTEM)
+    // ==========================================
     public function verifikasi(Request $request)
     {
-        $request->validate([
-            'id_kriteria' => 'required',
-            'kode_bukti' => 'required'
-        ]);
-
+        $request->validate(['id_kriteria' => 'required', 'kode_bukti' => 'required']);
         $idSatker = session('id_satker');
         $tahun = session('tahun_terpilih');
         $kode = (int)$request->kode_bukti;
-
         $mapping = $this->getMapping();
-        $triwulanMapping = $this->getTriwulanMapping();
 
-        if (!isset($mapping[$kode])) {
-             return $this->sendResponse($request, false, 'Model tidak ditemukan.');
-        }
+        if (!isset($mapping[$kode])) return $this->sendResponse($request, false, 'Model tidak ditemukan.');
 
-        // Cek apakah data ada di tabel sumber
-        $dokumenSumber = $this->checkSystemAvailability($kode, $idSatker, $tahun, $mapping, $triwulanMapping);
+        $dokumenSumber = $this->checkSystemAvailability($kode, $idSatker, $tahun, $mapping, $this->getTriwulanMapping());
 
         if ($dokumenSumber) {
-            // Ambil nama file dengan berbagai kemungkinan nama kolom
-            $filename = $dokumenSumber->id_filename 
-                        ?? $dokumenSumber->file 
-                        ?? $dokumenSumber->nama_file 
-                        ?? $dokumenSumber->link_bukti_dukung 
-                        ?? null;
-
+            $filename = $dokumenSumber->id_filename ?? $dokumenSumber->file ?? $dokumenSumber->nama_file ?? $dokumenSumber->link_bukti_dukung ?? null;
             if ($filename) {
-                // Simpan ke bukti_dukung (Linking)
                 DB::table('bukti_dukung')->updateOrInsert(
-                    [
-                        'id_satker'   => $idSatker,
-                        'id_kriteria' => $request->id_kriteria,
-                        'kode_bukti'  => $kode
-                    ],
-                    [
-                        'id_komponen'       => $request->id_komponen,
-                        'id_sub_komponen'   => $request->id_sub_komponen,
-                        'link_bukti_dukung' => $filename,
-                        'tgl_pengisian'     => now()->format('d/m/Y H:i A'),
-                    ]
+                    ['id_satker' => $idSatker, 'id_kriteria' => $request->id_kriteria, 'kode_bukti' => $kode],
+                    ['id_komponen' => $request->id_komponen, 'id_sub_komponen' => $request->id_sub_komponen, 'link_bukti_dukung' => $filename, 'tgl_pengisian' => now()->format('d/m/Y H:i A')]
                 );
-
-                return $this->sendResponse($request, true, 'Verifikasi Berhasil! File dari sistem telah ditautkan.');
+                return $this->sendResponse($request, true, 'Verifikasi Berhasil!');
             }
         }
-
         return $this->sendResponse($request, false, 'File belum tersedia di sistem.');
     }
 
-   // ==========================================
-    // 5. HELPERS & LOGIC PENYIMPANAN
     // ==========================================
-
-    /**
-     * Logic Cerdas untuk menyimpan data ke tabel sumber (Renstra, LKJiP, dll)
-     */
-private function saveToSourceTable($kode, $filename, $idSatker, $tahun)
+    // ⚙️ FUNGSI BANTUAN (HELPERS)
+    // ==========================================
+    private function saveToSourceTable($kode, $filename, $idSatker, $tahun)
     {
         $mapping = $this->getMapping();
         $triwulanMapping = $this->getTriwulanMapping();
-        
         $modelClass = $mapping[$kode];
-        if (is_string($modelClass)) return;
 
         $model = new $modelClass();
         $table = $model->getTable();
 
-        // A. DATA UMUM (Wajib untuk semua dokumen)
         $model->id_satker = $idSatker;
         $model->id_periode = $tahun;
 
-        // B. HANDLING TANGGAL & NAMA FILE (Dinamis cek kolom)
-        if (Schema::hasColumn($table, 'id_tglupload')) {
-            $model->id_tglupload = now();
-        } elseif (Schema::hasColumn($table, 'tgl_upload')) {
-            $model->tgl_upload = now();
-        }
+        if (Schema::hasColumn($table, 'id_tglupload')) $model->id_tglupload = now();
+        elseif (Schema::hasColumn($table, 'tgl_upload')) $model->tgl_upload = now();
 
-        if (Schema::hasColumn($table, 'id_filename')) {
-            $model->id_filename = $filename;
-        } elseif (Schema::hasColumn($table, 'file')) {
-            $model->file = $filename;
-        } elseif (Schema::hasColumn($table, 'link_bukti_dukung')) {
-            $model->link_bukti_dukung = $filename;
-        } elseif (Schema::hasColumn($table, 'nama_file')) {
-            $model->nama_file = $filename;
-        }
+        if (Schema::hasColumn($table, 'id_filename')) $model->id_filename = $filename;
+        elseif (Schema::hasColumn($table, 'file')) $model->file = $filename;
+        elseif (Schema::hasColumn($table, 'link_bukti_dukung')) $model->link_bukti_dukung = $filename;
+        elseif (Schema::hasColumn($table, 'nama_file')) $model->nama_file = $filename;
 
-        // C. KHUSUS DOKUMEN TRIWULAN
-        // Jika dokumen Tahunan, blok ini DILEWATI (id_triwulan dibiarkan null/default)
         if (isset($triwulanMapping[$kode])) {
             $valTw = $triwulanMapping[$kode];
-            
-            if (Schema::hasColumn($table, 'id_triwulan')) {
-                $model->id_triwulan = $valTw;
-            } elseif (Schema::hasColumn($table, 'triwulan')) {
-                $model->triwulan = str_replace('TW ', '', $valTw);
-            }
+            if (Schema::hasColumn($table, 'id_triwulan')) $model->id_triwulan = $valTw;
+            elseif (Schema::hasColumn($table, 'triwulan')) $model->triwulan = str_replace('TW ', '', $valTw);
         }
 
-        // D. KHUSUS DOKUMEN PERUBAHAN (VERSIONING)
-        // Berlaku untuk Tahunan maupun Triwulan yang punya revisi
-        $isPerubahan = in_array($kode, [21, 7, 9, 19]); // Daftar Kode Dokumen "Perubahan"
-        
         if (Schema::hasColumn($table, 'id_perubahan')) {
-            if ($isPerubahan) {
-                // Cari versi terakhir + 1
-                $lastVer = $modelClass::where('id_satker', $idSatker)
-                            ->where('id_periode', $tahun)
-                            ->max('id_perubahan');
+            if (in_array($kode, [21, 7, 9, 19])) {
+                $lastVer = $modelClass::where('id_satker', $idSatker)->where('id_periode', $tahun)->max('id_perubahan');
                 $model->id_perubahan = ($lastVer > 0) ? $lastVer + 1 : 1; 
             } else {
-                $model->id_perubahan = 0; // Dokumen Murni
+                $model->id_perubahan = 0;
             }
         }
 
-        // E. KOLOM TAMBAHAN (Opsional/Default)
         if (Schema::hasColumn($table, 'id_pagu')) $model->id_pagu = 0;
         if (Schema::hasColumn($table, 'id_gakyankum')) $model->id_gakyankum = 0;
         if (Schema::hasColumn($table, 'id_dukman')) $model->id_dukman = 0;
 
-        try {
-            $model->save();
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Gagal simpan ke tabel sumber ($kode): " . $e->getMessage());
-        }
+        try { $model->save(); } catch (\Exception $e) { \Illuminate\Support\Facades\Log::error("Gagal simpan ke sumber ($kode): " . $e->getMessage()); }
     }
 
- private function checkSystemAvailability($kode, $idSatker, $tahun, $modelMapping, $triwulanMapping)
+    private function checkSystemAvailability($kode, $idSatker, $tahun, $modelMapping, $triwulanMapping)
     {
         $modelClass = $modelMapping[$kode];
-        // Skip jika mapping tidak valid
-
         $query = $modelClass::where('id_satker', $idSatker);
 
-        // 1. Filter Tahun (Berlaku untuk Tahunan & Triwulan)
-        if (in_array($kode, [7, 12, 15, 17])) {
-            $query->where('id_periode', '2024'); // Hardcode untuk dokumen tertentu
-        } else {
-            $query->where('id_periode', $tahun);
-        }
+        if (in_array($kode, [7, 12, 15, 17])) $query->where('id_periode', '2024'); 
+        else $query->where('id_periode', $tahun);
 
-        // 2. Filter Triwulan (KHUSUS DOKUMEN TRIWULAN)
-        // Jika kode ada di mapping triwulan, kita filter.
-        // Jika TIDAK ADA (Dokumen Tahunan), blok ini otomatis DILEWATI.
         if (isset($triwulanMapping[$kode])) {
             $valTw = $triwulanMapping[$kode];           
             $valAngka = str_replace('TW ', '', $valTw); 
-
             $query->where(function($q) use ($valTw, $valAngka) {
                 $tableName = $q->getModel()->getTable();
-                if (Schema::hasColumn($tableName, 'id_triwulan')) {
-                    $q->where('id_triwulan', $valTw);
-                } elseif (Schema::hasColumn($tableName, 'triwulan')) {
-                    $q->where('triwulan', $valAngka);
-                }
+                if (Schema::hasColumn($tableName, 'id_triwulan')) $q->where('id_triwulan', $valTw);
+                elseif (Schema::hasColumn($tableName, 'triwulan')) $q->where('triwulan', $valAngka);
             });
         }
-        // [NOTE]: Dokumen Tahunan (Renstra, Renja, dll) langsung lanjut ke sini tanpa filter triwulan.
 
-        // 3. Filter Versi (PENTING untuk Dokumen Tahunan: Murni vs Perubahan)
-        // Contoh: Membedakan "Renstra Awal" (1) dengan "Renstra Perubahan" (21)
-        
-        // Grup Dokumen Murni (id_perubahan = 0)
+        $tableName = $query->getModel()->getTable();
         if (in_array($kode, [1, 6, 8, 18])) { 
-            $tableName = $query->getModel()->getTable();
-            if (Schema::hasColumn($tableName, 'id_perubahan')) {
-                $query->where('id_perubahan', 0);
-            }
-        } 
-        // Grup Dokumen Perubahan (id_perubahan > 0)
-        elseif (in_array($kode, [21, 7, 9, 19])) { 
-            $tableName = $query->getModel()->getTable();
-            if (Schema::hasColumn($tableName, 'id_perubahan')) {
-            return $query->orderBy('id_perubahan', 'desc')->first();
-            } else {
-                // Jika tidak punya versi perubahan, ambil yang terakhir diinput (atau default)
-                return $query->latest()->first(); 
-                // pastikan model punya timestamps (created_at), jika tidak pakai ->orderBy('id', 'desc')
-            }
+            if (Schema::hasColumn($tableName, 'id_perubahan')) $query->where('id_perubahan', 0);
+        } elseif (!in_array($kode, [21, 7, 9, 19]) && Schema::hasColumn($tableName, 'id_perubahan')) {
+            $query->orderBy('id_perubahan', 'desc');
         }
 
-        // Ambil data terbaru
-        return $query->orderBy('id_perubahan', 'desc')->first();
+        // Return first data only
+        return Schema::hasColumn($tableName, 'id_perubahan') ? $query->first() : $query->latest()->first();
     }
 
     private function sendResponse($request, $success, $message)
     {
-        if ($request->wantsJson()) {
-            return response()->json(['success' => $success, 'message' => $message], $success ? 200 : 404);
-        }
-        return Redirect::back()->with($success ? 'success' : 'error', $message);
+        return $request->wantsJson() ? response()->json(['success' => $success, 'message' => $message], $success ? 200 : 404) : Redirect::back()->with($success ? 'success' : 'error', $message);
     }
 
-
+    // ==========================================
+    // 📁 UPLOAD EXTRA (TL LHE & MONEV)
+    // ==========================================
     public function uploadTlLheAkip(Request $request)
     {
-        $request->validate([
-            'tl_lhe_akip_file' => 'required|mimes:pdf|max:4096',
-        ]);
-
+        $request->validate(['tl_lhe_akip_file' => 'required|mimes:pdf|max:10240']);
         $tahun = session('tahun_terpilih');
         $idSatker = session('id_satker');
 
-        // Cek versi terbaru
-        $latestFile = TlLheAkip::where('id_satker', $idSatker)
-            ->where('id_periode', $tahun)
-            ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
-            ->first();
+        $latest = TlLheAkip::select('id_perubahan')->where('id_satker', $idSatker)->where('id_periode', $tahun)->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')->first();
+        $id_perubahan = $latest ? $latest->id_perubahan + 1 : 0;
 
-        $id_perubahan = $latestFile ? $latestFile->id_perubahan + 1 : 0;
-
-        if ($request->hasFile('tl_lhe_akip_file')) {
-           try {
-                $file = $request->file('tl_lhe_akip_file');
-                $filename = 'tl_lhe_akip_' . $tahun . '_' . $id_perubahan . '.pdf';
-                $folderPath = 'uploads/repository/' . $idSatker;
-
-                // PERUBAHAN: Upload ke Google Drive
-                Storage::disk('google')->putFileAs($folderPath, $file, $filename);
-
-                TlLheAkip::create([
-                    'id_periode' => $tahun,
-                    'id_satker' => $idSatker,
-                    'id_perubahan' => $id_perubahan,
-                    'id_filename' => $filename,
-                    'id_tglupload' => now()->format('d/m/Y h:i A'),
-                ]);
-
-                return redirect()->route('evaluasi')->with([
-                    'success-tllhe' => 'File TL LHE AKIP berhasil diunggah ke Google Drive.', 
-                    'active_tab' => 'tl-lhe-akip'
-                ]);
-
-            } catch (\Exception $e) {
-                return back()->withErrors(['tl_lhe_akip_file' => 'Gagal Upload ke Google Drive: ' . $e->getMessage()]);
-            }
-        }
-
-        return back()->with('error', 'Gagal mengunggah file.');
+        try {
+            $filename = 'tl_lhe_akip_' . $tahun . '_' . $id_perubahan . '.pdf';
+            Storage::disk('google')->putFileAs("uploads/repository/{$idSatker}", $request->file('tl_lhe_akip_file'), $filename);
+            
+            TlLheAkip::create(['id_periode' => $tahun, 'id_satker' => $idSatker, 'id_perubahan' => $id_perubahan, 'id_filename' => $filename, 'id_tglupload' => now()->format('d/m/Y h:i A')]);
+            return redirect()->route('evaluasi')->with(['success-tllhe' => 'Berhasil upload Google Drive', 'active_tab' => 'tl-lhe-akip']);
+        } catch (\Exception $e) { return back()->withErrors(['tl_lhe_akip_file' => 'Gagal Upload: ' . $e->getMessage()]); }
     }
 
     public function uploadMonevRenaksi(Request $request)
     {
-        $request->validate([
-            'id_triwulan' => 'required|in:TW 1,TW 2,TW 3,TW 4',
-            'monev_file' => 'required|mimes:pdf|max:4096',
-        ]);
-
+        $request->validate(['id_triwulan' => 'required|in:TW 1,TW 2,TW 3,TW 4', 'monev_file' => 'required|mimes:pdf|max:10240']);
         $tahun = session('tahun_terpilih');
         $idSatker = session('id_satker');
         $id_triwulan = $request->input('id_triwulan');
 
-        // Ambil versi terakhir untuk triwulan tersebut
-        $latestmonev = MonevRenaksi::where('id_satker', $idSatker)
-            ->where('id_periode', $tahun)
-            ->where('id_triwulan', $id_triwulan)
-            ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
-            ->first();
+        $latest = MonevRenaksi::select('id_perubahan')->where('id_satker', $idSatker)->where('id_periode', $tahun)->where('id_triwulan', $id_triwulan)->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')->first();
+        $id_perubahan = $latest ? $latest->id_perubahan + 1 : 0;
 
-        $id_perubahan = $latestmonev ? $latestmonev->id_perubahan + 1 : 0;
-
-        if ($request->hasFile('monev_file')) {
-           try {
-                $file = $request->file('monev_file');
-                $safeTriwulan = str_replace(' ', '_', $id_triwulan); // TW 1 -> TW_1
-                $filename = 'renaksieval_' . $tahun . '_' . $id_perubahan . '_' . $safeTriwulan . '.pdf';
-                $folderPath = 'uploads/repository/' . $idSatker;
-
-                // PERUBAHAN: Upload ke Google Drive
-                Storage::disk('google')->putFileAs($folderPath, $file, $filename);
-
-                MonevRenaksi::create([
-                    'id_periode' => $tahun,
-                    'id_satker' => $idSatker,
-                    'id_perubahan' => $id_perubahan,
-                    'id_filename' => $filename,
-                    'id_tglupload' => now()->format('d/m/Y h:i A'),
-                    'id_triwulan' => $id_triwulan,
-                ]);
-
-                return redirect()->route('evaluasi')->with([
-                    'success-monev' => 'File Monev Renaksi berhasil diunggah ke Google Drive.',
-                    'active_tab' => 'monev-renaksi'
-                ]);
-
-            } catch (\Exception $e) {
-                return back()->withErrors(['monev_file' => 'Gagal Upload ke Google Drive: ' . $e->getMessage()]);
-            }
-        }
-
-        return back()->with('error', 'Gagal mengunggah file.');
+        try {
+            $filename = 'renaksieval_' . $tahun . '_' . $id_perubahan . '_' . str_replace(' ', '_', $id_triwulan) . '.pdf';
+            Storage::disk('google')->putFileAs("uploads/repository/{$idSatker}", $request->file('monev_file'), $filename);
+            
+            MonevRenaksi::create(['id_periode' => $tahun, 'id_satker' => $idSatker, 'id_perubahan' => $id_perubahan, 'id_filename' => $filename, 'id_tglupload' => now()->format('d/m/Y h:i A'), 'id_triwulan' => $id_triwulan]);
+            return redirect()->route('evaluasi')->with(['success-monev' => 'Berhasil upload Google Drive', 'active_tab' => 'monev-renaksi']);
+        } catch (\Exception $e) { return back()->withErrors(['monev_file' => 'Gagal Upload: ' . $e->getMessage()]); }
     }
 }

@@ -1,11 +1,10 @@
 // resources/js/Components/Perencanaan/FileUploadSection.jsx
 import React, {useState} from 'react';
-import { useForm, Link, usePage } from '@inertiajs/react';
+import { useForm, Link } from '@inertiajs/react';
 import { 
     Box, Card, CardContent, CardHeader, Button, Alert, LinearProgress, Typography, Paper, 
     TableContainer, Table, TableHead, TableBody, TableRow, TableCell, IconButton, Collapse
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 
 export default function FileUploadSection({
@@ -22,12 +21,15 @@ export default function FileUploadSection({
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        setShowFlash(true); // Tampilkan lagi jika ada flash message baru
+        setShowFlash(true);
         post(uploadRoute, {
             onSuccess: () => reset(),
             preserveScroll: true,
         });
     };
+
+    // 🔥 VARIABEL PENGAMAN: Jika files undefined/null, jadikan array kosong agar .length & .map tidak error
+    const safeFiles = files || [];
 
     return (
         <Box>
@@ -55,7 +57,7 @@ export default function FileUploadSection({
                             fullWidth
                             sx={{ mt: 2 }}
                         >
-                            Pilih File PDF (Max: 2MB)
+                            Pilih File PDF (Max: 10MB)
                             <input 
                                 type="file"
                                 hidden
@@ -96,25 +98,24 @@ export default function FileUploadSection({
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {files.length === 0 ? (
+                        {/* Menggunakan safeFiles pengganti files */}
+                        {safeFiles.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={5} align="center">Belum ada file.</TableCell>
                             </TableRow>
                         ) : (
-                            files.map((file, index) => (
-                                <TableRow key={file.id} hover>
+                            safeFiles.map((file, index) => (
+                                <TableRow key={file.id || index} hover>
                                     <TableCell>{index + 1}</TableCell>
                                     <TableCell>
-                                        <a href={`/uploads/repository/${idSatker}/${file.id_filename}`} target="_blank" rel="noopener noreferrer">
+                                        {/* 🔥 UPDATE LINK: Mengarah ke file/view untuk baca dari Google Drive */}
+                                        <a href={`/file/view/${idSatker}/${file.id_filename}`} target="_blank" rel="noopener noreferrer">
                                             {fileNamePrefix} Tahun {file.id_periode}
                                         </a>
                                     </TableCell>
                                     <TableCell>{file.id_perubahan}</TableCell>
                                     <TableCell>{file.id_tglupload}</TableCell>
                                     <TableCell>
-                                        {/* <IconButton color="warning" size="small" onClick={() => onEditClick(file)}>
-                                            <EditIcon />
-                                        </IconButton> */}
                                         <IconButton
                                             component={Link}
                                             href={`${deleteRoutePrefix}/${file.id}`}
