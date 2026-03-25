@@ -43,14 +43,14 @@ class PerencanaanController extends Controller
 
         return Inertia::render('Kelola/Perencanaan', [
             'tahun' => $tahun,
-            'renstraFiles' => $fetchLatest(Renstra::class, 'id_periode', $id_periode),
-            'ikuFiles'     => $fetchLatest(Iku::class, 'id_periode', $tahun),
-            'renjaFiles'   => $fetchLatest(Renja::class, 'id_periode', $tahun),
-            'rkaklFiles'   => $fetchLatest(Rkakl::class, 'id_periode', $tahun),
-            'renaksiFiles' => $fetchLatest(Renaksi::class, 'id_periode', $tahun),
-            'pkFiles'      => $fetchLatest(Pk::class, 'id_periode', $tahun),
+            'renstra' => $fetchLatest(Renstra::class, 'id_periode', $id_periode),
+            'iku'     => $fetchLatest(Iku::class, 'id_periode', $tahun),
+            'renja'   => $fetchLatest(Renja::class, 'id_periode', $tahun),
+            'rkakl'   => $fetchLatest(Rkakl::class, 'id_periode', $tahun),
+            'renaksi' => $fetchLatest(Renaksi::class, 'id_periode', $tahun),
+            'pk'      => $fetchLatest(Pk::class, 'id_periode', $tahun),
             // DIPA butuh kolom ekstra
-            'dipaFiles'    => Dipa::select(['id', 'id_filename', 'id_perubahan', 'id_tglupload', 'id_pagu', 'id_gakyankum', 'id_dukman'])
+            'dipa'    => Dipa::select(['id', 'id_filename', 'id_perubahan', 'id_tglupload', 'id_pagu', 'id_gakyankum', 'id_dukman'])
                                 ->where('id_satker', $idSatker)
                                 ->where('id_periode', $tahun)
                                 ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')

@@ -36,7 +36,7 @@ function FilesTable({ files, fileNamePrefix, tahun, idSatker, deleteRoutePrefix 
                                 <TableCell>{index + 1}</TableCell>
                                 <TableCell>
                                     <a 
-                                        href={`/uploads/repository/${idSatker}/${file.id_filename}`} 
+                                        href={`/file/view/${idSatker}/${file.id_filename}`} 
                                         target="_blank" 
                                         rel="noopener noreferrer"
                                         style={{ textDecoration: 'none', color: '#1976d2', fontWeight: 500 }}
