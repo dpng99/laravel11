@@ -30,6 +30,7 @@ use Illuminate\Support\Facades\Redirect;
 use App\Http\Controllers\DownloaderFile;
 use App\Http\Controllers\IndikatorViewController;
 use App\Http\Controllers\GoogleDriveController;
+use App\Service\GoogleService;
 /*
 |--------------------------------------------------------------------------
 | Rute Publik (Tidak Perlu Login)
@@ -76,13 +77,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/target/store', 'storetarget')->name('target.store');
         Route::post('/perencanaan/update/{type}/{id}', 'updateFile')->name('perencanaan.update');
         Route::delete('/perencanaan/delete/{type}/{id}', 'deleteFile')->name('perencanaan.delete');
-        Route::post('/perencanaan/upload-renstra', 'uploadRenstra')->name('upload.renstra');
-        Route::post('/perencanaan/upload-iku', 'uploadIku')->name('upload.iku');
-        Route::post('/perencanaan/upload-renja', 'uploadRenja')->name('upload.renja');
-        Route::post('/perencanaan/upload-rkakl', 'uploadRkakl')->name('upload.rkakl');
-        Route::post('/perencanaan/upload-renaksi', 'uploadRenaksi')->name('upload.renaksi');
-        Route::post('/upload-pk', 'uploadPK')->name('upload.pk');
-        Route::post('/upload-dipa', 'uploadDipa')->name('upload.dipa');
+        Route::post('/perencanaan/upload/{type}', [PerencanaanController::class, 'uploadFile'])->name('perencanaan.upload');
+        Route::delete('/perencanaan/delete/{type}/{id}', [PerencanaanController::class, 'deleteFile'])->name('perencanaan.delete');
     });
 
     // === Pengukuran ===
@@ -206,34 +202,66 @@ Route::middleware(['auth'])->group(function () {
 
 
 Route::get('/upload-drive', [GoogleDriveController::class, 'upload']);
-Route::get('/debug-google', function () {
-$config = config('filesystems.disks.google');
-    
-    // Kita tembak API Google langsung secara manual (Bypass library)
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, 'https://oauth2.googleapis.com/token');
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
-        'client_id' => $config['clientId'],
-        'client_secret' => $config['clientSecret'],
-        'refresh_token' => $config['refreshToken'],
-        'grant_type' => 'refresh_token',
-    ]));
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    
-    // Abaikan SSL sementara HANYA untuk tes ini
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
-    
-    $response = curl_exec($ch);
-    $error = curl_error($ch);
-    curl_close($ch);
 
-    return response()->json([
-        'Status' => 'Tes Tukar Token ke Google',
-        'cURL_Error' => $error ?: 'Aman, tidak ada error jaringan',
-        'Balasan_Dari_Google' => json_decode($response, true)
-    ]);
+Route::get('/cek-gdrive', function () {
+    $log = [];
+    $log[] = "🔍 MEMULAI DIAGNOSTIK GOOGLE DRIVE...";
+
+    try {
+        // TAHAP 1: Cek Konfigurasi
+        $log[] = "⏳ 1. Mengecek konfigurasi di .env & config...";
+        if (!config('google.refresh_token') || !config('filesystems.disks.google.folder_id')) {
+            throw new \Exception("Kredensial (Refresh Token) atau Folder ID belum lengkap!");
+        }
+        $log[] = "✅ Tahap 1 Lulus: Konfigurasi aman.";
+
+        // TAHAP 2: Cek Mesin GoogleService
+        $log[] = "⏳ 2. Mengetes mesin GoogleService (Meminta Token Segar)...";
+       $client = app(\App\Services\GoogleService::class)->getClient();
+        $token = $client->fetchAccessTokenWithRefreshToken();
+        if (isset($token['error'])) {
+            throw new \Exception("Token Error: " . ($token['error_description'] ?? $token['error']));
+        }
+        $log[] = "✅ Tahap 2 Lulus: Berhasil terhubung ke Google API.";
+
+        // TAHAP 3: Cek Akses Baca (Read)
+        $log[] = "⏳ 3. Mengetes akses baca (Melihat isi folder)...";
+        $files = \Illuminate\Support\Facades\Storage::disk('google')->files('/');
+        $log[] = "✅ Tahap 3 Lulus: Berhasil membaca folder (Ditemukan " . count($files) . " file).";
+
+        // TAHAP 4: Cek Akses Tulis (Write)
+        $log[] = "⏳ 4. Mengetes akses tulis (Mengupload file percobaan)...";
+        $testFileName = 'test_koneksi_' . time() . '.txt';
+        $upload = \Illuminate\Support\Facades\Storage::disk('google')->put($testFileName, 'Ini adalah file uji coba diagnostik otomatis.');
+        if (!$upload) {
+            throw new \Exception("Gagal mengupload file ke Google Drive.");
+        }
+        $log[] = "✅ Tahap 4 Lulus: Berhasil mengupload file '$testFileName'.";
+
+        // TAHAP 5: Cek Akses Hapus (Delete)
+        $log[] = "⏳ 5. Mengetes akses hapus (Membersihkan file percobaan)...";
+        $delete = \Illuminate\Support\Facades\Storage::disk('google')->delete($testFileName);
+        if (!$delete) {
+            throw new \Exception("Berhasil upload, tapi gagal menghapus file. Cek permission folder.");
+        }
+        $log[] = "✅ Tahap 5 Lulus: Berhasil menghapus file percobaan.";
+
+        $log[] = "🎉 KESIMPULAN: Sistem Google Drive Anda 100% SEHAT dan SIAP DIGUNAKAN!";
+
+        return response()->json([
+            'status' => 'SUPER_AMAN',
+            'catatan_sistem' => $log
+        ], 200, [], JSON_PRETTY_PRINT);
+
+    } catch (\Exception $e) {
+        $log[] = "❌ ERROR FATAL: " . $e->getMessage();
+        $log[] = "⚠️ KESIMPULAN: Sistem Google Drive mengalami kendala. Silakan cek pesan error di atas.";
+        
+        return response()->json([
+            'status' => 'ADA_MASALAH',
+            'catatan_sistem' => $log
+        ], 500, [], JSON_PRETTY_PRINT);
+    }
 });
-
 
 });

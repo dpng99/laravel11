@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "serenata-storage",
+  "private_key_id": "576bcfce4540c22af433d30d2500bb9eb921c9b8",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCbGFtpmleQiXWN\nChUeT1uFAYux64YmJKXKR6ZIBElpX2L31SVgIoieuZZ2NK+spjTiAULRKAHZyni2\n7LkdpXm5cwiBCNtc3zRg/iK3sZB2i8bt36s2Me23bQgBZxtsKDRu6pbiHw2coI88\nUDob13ouEdAUsrsv43pL5CN/2mY0mm0rml5YpwhGrXq/XlpU+AGRFS9sisMsb9Ux\ngCG4BtNw+/vbkkA0rZ7HpgkI6AqjfUIQNQYfyUGbpNyzrr7VwB7hsrHbu7qL3kAj\nhuXRwmufvIjbt4/Ikxd1HjqUni+lcIi6H5G0S3sud+PwhAKVFHD80RZVnWK6mF2P\ntpVq0xzZAgMBAAECggEAF+KnaVsQszzIMsFjwTg9gv1a8zqvfT5VnhJsxFiMqcK7\n7ikQSX7oBXHVfzzb9T3flRLWpHmB13W8I4fPdoZeebYCkES569KgMXPSCvI4qlka\neNXie0UzM/WBrx2e9og2kwJj3E0l/oInrQU5/cGwmlm57wYbl+NzmS54XR9YcC8+\nz7jRs8fUST0km5ltTNUHFOJ0u41EJQRDXjdYytZZM6qkHfcYTS0F7wy3EXQnhmWs\nXodwuBwZOD7IHOWS5yqrLkoDJbiJV+pYWQrJ6vbuxwLDvjw8FvX/s9dNaKl5zrYy\n5AT5c1fESOhGFjXOA2iqruD4jwr2Ex2fcNsuc3ZQpQKBgQDLV9xpDzPtLXL3L3CY\nIJfNA+/l3KCnyxo2p4J+CIflvRQs07E6uYM6gHkEb2k9CbEskye8lRctuz+DdvYS\n2TtAfUddLSjiJWG0oD1O9klO2LVVjTD+mAp6/HI5RUhOlHzLcdpLaocDugjgJtrZ\nmTpZhHnxqpDC5GVW3VGnfug4HwKBgQDDQgJaumhtBd1n+Pxr70aQeR6m02iOBNI5\nMn3nzxIQk/nfmoDo9wki9q3W3SLB3lnzi9GS5/1Mm3tHioviRa4Tm3RZbomI+U1I\n8pTr9c4Juv3l5T1iKNiXwflb/M22cyLtPYUHLJfcT5C/zLUM2X3djMrrWExjAvmC\n+AdAfaPsBwKBgBr404an+pZKQgahp0i2ggwyqn6N7k1zdk2rmHaJQSVrGCL+DXMh\nqlN3ORYqhQYQpAyqlEnCaOmq/bi9bdSANgjO1Ul5tQOSO8yOuLMhngW0XxEzAj2z\nAyjfFXOdSgMKVSdTOcZpIfGPmp/I55yXY5L+LIKuwjbnvr1v6+XQwpK3AoGAdNde\nM06SyJKW3+3Vlv0S+8cOuYOOcFWgOsvlHb8Cr1rtTonVFBMnq31znzyq3Noid6O2\nYDNklt//kFruxBMwTNlccVu8/3M3dSx8QwrPJXF5F4XrCn8oxP81KX+I1eHmB5Ml\ntJpRsWsHUk68FJldQSNMFjK7WxBfoKitJkFIwycCgYBZ+WbELCJp6I+6eepX3oUa\nUI7G6LGF1By9vuyKp9sgaucIBmpVpv4j6uE9DShLAW3+WqtABgi76Jgq90SSmWwx\ntfHmBkMhs8LyEy4jHRuDA25KfxUqr+RrigEcd3pYjeeDSpai5p84NVvql0knJRpx\nBDdwN+P279gD0rZNKS+iwg==\n-----END PRIVATE KEY-----\n",
+  "client_email": "sakip-storage@serenata-storage.iam.gserviceaccount.com",
+  "client_id": "107197402469316870894",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/sakip-storage%40serenata-storage.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

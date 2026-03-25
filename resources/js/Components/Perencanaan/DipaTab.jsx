@@ -43,7 +43,7 @@ export default function DipaTab({ dipaFiles, flashMessage, tahun, idSatker, onEd
     const handleSubmit = (e) => {
         e.preventDefault();
         setShowFlash(true);
-        post('/perencanaan/upload-dipa', { // URL Upload DIPA
+        post('/perencanaan/upload/dipa', { // URL Upload DIPA
             onSuccess: () => {
                 reset();
                 setFormattedPagu('');

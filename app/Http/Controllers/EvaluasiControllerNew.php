@@ -300,6 +300,23 @@ class EvaluasiControllerNew extends Controller
     // ==========================================
     // 📁 UPLOAD EXTRA (TL LHE & MONEV)
     // ==========================================
+    public function uploadLheAkip(Request $request)
+    {
+        $request->validate(['lhe_akip_file' => 'required|mimes:pdf|max:10240']);
+        $tahun = session('tahun_terpilih');
+        $idSatker = session('id_satker');
+
+        $latest = LheAkip::select('id_perubahan')->where('id_satker', $idSatker)->where('id_periode', $tahun)->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')->first();
+        $id_perubahan = $latest ? $latest->id_perubahan + 1 : 0;
+
+        try {
+            $filename = 'lhe_akip_' . $tahun . '_' . $id_perubahan . '.pdf';
+            Storage::disk('google')->putFileAs("uploads/repository/{$idSatker}", $request->file('lhe_akip_file'), $filename);
+            
+            LheAkip::create(['id_periode' => $tahun, 'id_satker' => $idSatker, 'id_perubahan' => $id_perubahan, 'id_filename' => $filename, 'id_tglupload' => now()->format('d/m/Y h:i A')]);
+            return redirect()->route('evaluasi')->with(['success-lhe' => 'Berhasil upload Google Drive', 'active_tab' => 'lhe-akip']);
+        } catch (\Exception $e) { return back()->withErrors(['lhe_akip_file' => 'Gagal Upload: ' . $e->getMessage()]); }
+    }
     public function uploadTlLheAkip(Request $request)
     {
         $request->validate(['tl_lhe_akip_file' => 'required|mimes:pdf|max:10240']);

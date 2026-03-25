@@ -5,13 +5,16 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "inertiajs/inertia-laravel": "^2.0",
         "php": "^8.4",
+        "google/apiclient": "^2.19",
+        "inertiajs/inertia-laravel": "^2.0",
         "laravel/breeze": "*",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.9",
         "lcobucci/jwt": "^4.0",
+        "league/flysystem": "^3.32",
+        "masbug/flysystem-google-drive-ext": "^2.4",
         "predis/predis": "^3.0",
         "tightenco/ziggy": "^2.0",
         "yaza/laravel-google-drive-storage": "^4.1"

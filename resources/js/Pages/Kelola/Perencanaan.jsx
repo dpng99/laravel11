@@ -97,7 +97,7 @@ export default function Perencanaan() {
                         <FileUploadSection
                             title={`Rencana Strategis (Renstra) Tahun ${tahun == '2024' ? '2019 - 2024' : '2025 - 2029'}`}
                             description="Rencana Strategis (Renstra) merupakan dokumen perencanaan..."
-                            uploadRoute="/perencanaan/upload-renstra"
+                            uploadRoute="/perencanaan/upload/renstra"
                             fileInputName="renstra_file"
                             files={renstra}
                             flashMessage={flash['success-renstra']}
@@ -113,7 +113,7 @@ export default function Perencanaan() {
                         <FileUploadSection
                             title="Indikator Kinerja Utama (IKU)"
                             description="Indikator Kinerja Utama (IKU) Kejaksaan adalah ukuran keberhasilan..."
-                            uploadRoute="/perencanaan/upload-iku"
+                            uploadRoute="/perencanaan/upload/iku"
                             fileInputName="iku_file"
                             files={iku}
                             flashMessage={flash['success-iku']}
@@ -129,7 +129,7 @@ export default function Perencanaan() {
                         <FileUploadSection
                             title="Rencana Kerja Tahunan"
                             description="Rencana Kinerja Tahunan (RKT) merupakan penjabaran dari sasaran..."
-                            uploadRoute="/perencanaan/upload-renja"
+                            uploadRoute="/perencanaan/upload/renja"
                             fileInputName="renja_file"
                             files={renja}
                             flashMessage={flash['success-renja']}
@@ -145,7 +145,7 @@ export default function Perencanaan() {
                         <FileUploadSection
                             title="Rencana Kerja Anggaran Kementerian atau Lembaga"
                             description="Data Kebutuhan Riil..."
-                            uploadRoute="/perencanaan/upload-rkakl"
+                            uploadRoute="/perencanaan/upload/rkakl"
                             fileInputName="rkakl_file"
                             files={rkakl}
                             flashMessage={flash['success-rkakl']}
@@ -172,7 +172,7 @@ export default function Perencanaan() {
                          <FileUploadSection
                             title="Rencana Aksi"
                             description="Data Kebutuhan Riil..."
-                            uploadRoute="/perencanaan/upload-renaksi"
+                            uploadRoute="/perencanaan/upload/renaksi"
                             fileInputName="renaksi_file"
                             files={renaksi}
                             flashMessage={flash['success-renaksi']}

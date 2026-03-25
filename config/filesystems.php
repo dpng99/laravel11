@@ -56,16 +56,9 @@ return [
             'throw' => false,
         ],
         'google' => [
-                    'driver' => 'google',
-                    'clientId' => env('GOOGLE_DRIVE_CLIENT_ID'),
-                    'clientSecret' => env('GOOGLE_DRIVE_CLIENT_SECRET'),
-                    'refreshToken' => env('GOOGLE_DRIVE_REFRESH_TOKEN'),
-                    'folder' => env('GOOGLE_DRIVE_FOLDER'),
-                    // TAMBAHKAN INI KHUSUS LOCALHOST
-                    'http_client_options' => [
-                        'verify' => false, // Matikan verifikasi SSL
-                            ],
-                        ],
+            'driver' => 'google',
+            'folder_id' => env('GOOGLE_DRIVE_FOLDER_ID'),
+        ],
     ],
 
     /*
