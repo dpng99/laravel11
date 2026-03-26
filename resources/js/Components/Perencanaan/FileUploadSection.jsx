@@ -110,7 +110,7 @@ export default function FileUploadSection({
                                     <TableCell>
                                         {/* 🔥 UPDATE LINK: Mengarah ke file/view untuk baca dari Google Drive */}
                                         <a href={`/file/view/${idSatker}/${file.id_filename}`} target="_blank" rel="noopener noreferrer">
-                                            {fileNamePrefix} Tahun {file.id_periode}
+                                            {fileNamePrefix} ({file.id_periode})
                                         </a>
                                     </TableCell>
                                     <TableCell>{file.id_perubahan}</TableCell>

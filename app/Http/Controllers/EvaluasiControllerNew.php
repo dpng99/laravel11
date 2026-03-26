@@ -49,6 +49,58 @@ class EvaluasiControllerNew extends Controller
             18 => 'TW 1', 19 => 'TW 2', 37 => 'TW 1', 38 => 'TW 2', 39 => 'TW 1', 40 => 'TW 2',
         ];
     }
+    // ==========================================
+    // 📝 KAMUS PREFIX NAMA FILE (Full Sesuai Pedoman)
+    // ==========================================
+    private function getFilePrefixMapping()
+    {
+        return [
+            1  => 'renstra',                     // [cite: 1]
+            2  => 'renja',                       // [cite: 1]
+            3  => 'renaksi',                     // [cite: 1]
+            4  => 'rkakl',                       // [cite: 1]
+            5  => 'dipa',                        // [cite: 1]
+            6  => 'pk',                          // [cite: 1]
+            7  => 'pk',                          // [cite: 1]
+            8  => 'IKU',                         // [cite: 1]
+            9  => 'IKU',                         // [cite: 1]
+            10 => 'lkjip',                       // [cite: 1]
+            11 => 'lkjip',                       // [cite: 1]
+            12 => 'lkjip',                       // [cite: 1]
+            13 => 'rastaff',                     // [cite: 2]
+            14 => 'rastaff',                     // [cite: 2]
+            15 => 'lhe',                         // [cite: 2]
+            16 => 'lhe',                         // [cite: 2]
+            17 => 'tl_lhe_akip',                 // [cite: 2]
+            18 => 'monev',                       // [cite: 2]
+            19 => 'monev',                       // [cite: 2]
+            20 => 'pokin_ranwal',                // [cite: 2]
+            21 => 'renstra_lembaga',             // [cite: 2]
+            22 => 'lkjip',                       // [cite: 2]
+            23 => 'sampel_skp',                  // [cite: 2]
+            24 => 'tim_pm',                      // [cite: 3]
+            25 => 'tim_evaluator',               // [cite: 3]
+            26 => 'absen_pm',                    // [cite: 3]
+            27 => 'notulensi_bimtek',            // [cite: 3]
+            28 => 'nodis_penyelenggaraan_akip',  // [cite: 3]
+            29 => 'nodis_evaluasi_akip',         // [cite: 3]
+            30 => 'memo_data_kinerja',           // [cite: 3] - Mengganti spasi menjadi _
+            31 => 'nodis_data_kinerja',          // [cite: 4] - Mengganti spasi menjadi _
+            32 => 'reward_punishment',           // [cite: 4]
+            33 => 'sampel_rekom',                // [cite: 4]
+            34 => 'ss_perencanaan',              // [cite: 4]
+            35 => 'ss_laporan_web',              // [cite: 4]
+            36 => 'ss_laporan_app',              // [cite: 4]
+            37 => 'tar_lkjip',                   // [cite: 4]
+            38 => 'tar_lkjip',                   // [cite: 4]
+            39 => 'memo_lkjip',                  // [cite: 4]
+            40 => 'memo_lkjip',                  // [cite: 5]
+            41 => 'tar_pm',                      // [cite: 5]
+            42 => 'ba_praevaluasi',              // [cite: 5]
+            43 => 'ba_pleno',                    // [cite: 5]
+            44 => 'lhe',                         // [cite: 5]
+        ];
+    }
 
     // ==========================================
     // 🚀 INDEX SUPER OPTIMIZED
@@ -70,8 +122,7 @@ class EvaluasiControllerNew extends Controller
         // Daripada query ratusan kali di dalam loop, kita panggil 1x dan jadikan Dictionary
         $allBuktiDukung = DB::table('bukti_dukung')
                             ->where('id_satker', $idSatker)
-                            ->get()
-                            ->keyBy('id_kriteria'); 
+                            ->get();
 
         // 🔥 OPTIMASI 2: Cache ketersediaan sistem dalam memori sementara
         // Agar model yang sama (misal Renstra) tidak di-query berulang kali
@@ -88,7 +139,16 @@ class EvaluasiControllerNew extends Controller
                         $fileLink = null;
 
                         // Ambil dari Dictionary Memori (Jauh lebih cepat dari DB query)
-                        $buktiLke = $allBuktiDukung->get($kriteria->kode);
+                        // 1. Coba cari berdasarkan kode_bukti spesifik (Untuk Data Baru yang Akurat)
+                        $buktiLke = $allBuktiDukung->where('kode_bukti', $kode)->first();
+                        
+                        // 2. JARING PENGAMAN: Jika tidak ketemu, cari data lama yang 'kode_bukti'-nya masih kosong
+                        // Ini memastikan bukti dukung yang sudah di-upload di masa lalu tidak mendadak hilang
+                        if (!$buktiLke) {
+                            $buktiLke = $allBuktiDukung->where('id_kriteria', $kriteria->kode)
+                                                       ->whereIn('kode_bukti', [null, 0, ''])
+                                                       ->first();
+                        }
 
                         if ($buktiLke && !empty($buktiLke->link_bukti_dukung)) {
                             $status = 'Ada';
@@ -169,14 +229,17 @@ class EvaluasiControllerNew extends Controller
 
         $dokRef = lke_buktidukung::find($kode);
         $cleanName = $dokRef ? preg_replace('/[^A-Za-z0-9]/', '_', $dokRef->dokumen) : 'Dokumen';
-        $filename = substr($cleanName, 0, 40) . "_{$idSatker}_{$tahun}_" . time() . "." . $request->file('file')->getClientOriginalExtension();
+        $extension = $request->file('file')->getClientOriginalExtension();
+        // Buat nama file berdasarkan pedoman
+        $filename = $this->generateCustomFileName($kode, $idSatker, $tahun, $extension);
         $folderPath = "uploads/repository/{$idSatker}";
 
         try {
             Storage::disk('google')->putFileAs($folderPath, $request->file('file'), $filename);
 
             DB::table('bukti_dukung')->updateOrInsert(
-                ['id_satker' => $idSatker, 'id_kriteria' => $request->id_kriteria],
+                // 🔥 TAMBAHKAN 'kode_bukti' AGAR DOKUMEN DALAM 1 KRITERIA TIDAK SALING TIMPA
+                ['id_satker' => $idSatker, 'id_kriteria' => $request->id_kriteria, 'kode_bukti' => $kode],
                 ['id_komponen' => $request->id_komponen, 'id_sub_komponen' => $request->id_sub_komponen, 'link_bukti_dukung' => $filename, 'tgl_pengisian' => now()->format('d/m/Y H:i A')]
             );
 
@@ -352,5 +415,49 @@ class EvaluasiControllerNew extends Controller
             MonevRenaksi::create(['id_periode' => $tahun, 'id_satker' => $idSatker, 'id_perubahan' => $id_perubahan, 'id_filename' => $filename, 'id_tglupload' => now()->format('d/m/Y h:i A'), 'id_triwulan' => $id_triwulan]);
             return redirect()->route('evaluasi')->with(['success-monev' => 'Berhasil upload Google Drive', 'active_tab' => 'monev-renaksi']);
         } catch (\Exception $e) { return back()->withErrors(['monev_file' => 'Gagal Upload: ' . $e->getMessage()]); }
+    }
+    // ==========================================
+    // ⚙️ GENERATOR NAMA FILE CUSTOM (Sesuai Pedoman)
+    // ==========================================
+    private function generateCustomFileName($kode, $idSatker, $tahun, $extension)
+    {
+        // 1. Ambil Nama Depan (Prefix) dari Kamus
+        $prefixes = $this->getFilePrefixMapping();
+        $prefix = $prefixes[$kode] ?? 'dokumen_sakip';
+
+        // 2. Ambil Triwulan & Ubah ke Angka Romawi (TW 1 -> TW I)
+        $tw = '';
+        $triwulans = $this->getTriwulanMapping();
+        
+        if (isset($triwulans[$kode])) {
+            $romans = ['1' => 'I', '2' => 'II', '3' => 'III', '4' => 'IV'];
+            $angkaTw = trim(str_replace('TW', '', $triwulans[$kode])); // Ambil angkanya saja
+            $romanTw = $romans[$angkaTw] ?? $angkaTw;
+            
+            $tw = '_TW ' . $romanTw; // Hasil: "_TW I" atau "_TW II"
+        }
+
+        // 3. Hitung Iterasi / Perubahan Terakhir secara otomatis
+        $iterasi = 0;
+        $mapping = $this->getMapping();
+
+        if (isset($mapping[$kode])) {
+            $modelClass = $mapping[$kode];
+            $table = (new $modelClass)->getTable();
+
+            // Cek apakah tabel punya kolom 'id_perubahan'
+            if (\Illuminate\Support\Facades\Schema::hasColumn($table, 'id_perubahan')) {
+                // Cari angka iterasi tertinggi untuk satker & tahun ini
+                $latest = $modelClass::where('id_satker', $idSatker)
+                                     ->where('id_periode', $tahun)
+                                     ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
+                                     ->value('id_perubahan');
+                
+                $iterasi = $latest !== null ? $latest + 1 : 0;
+            }
+        }
+
+        // 4. Rakit Nama Final (Contoh: ss_perencanaan_2025_0.pdf atau lkjip_2025_1_TW I.pdf)
+        return "{$prefix}_{$tahun}_{$iterasi}{$tw}.{$extension}";
     }
 }

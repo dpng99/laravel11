@@ -22,7 +22,42 @@ use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Storage;
 class PerencanaanController extends Controller
 {
-   public function index(Request $request)
+//    public function index(Request $request)
+//     {
+//         if (!session()->has('tahun_terpilih')) return redirect()->route('pilih.tahun');
+
+//         $tahun = session('tahun_terpilih');
+//         $idSatker = session('id_satker');
+//         $id_periode = ($tahun == "2024") ? "P1" : "P2";
+
+//         // 🔥 OPTIMASI: Ambil HANYA kolom yang dibutuhkan untuk menghemat RAM
+//         $selectCols = ['id', 'id_filename', 'id_perubahan', 'id_tglupload'];
+
+//         // Helper untuk memanggil data dengan cepat
+//         $fetchLatest = fn($model, $periodeCol, $periodeVal) => 
+//             $model::select($selectCols)
+//                 ->where('id_satker', $idSatker)
+//                 ->where($periodeCol, $periodeVal)
+//                 ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
+//                 ->get();
+
+//         return Inertia::render('Kelola/Perencanaan', [
+//             'tahun' => $tahun,
+//             'renstra' => $fetchLatest(Renstra::class, 'id_periode', $id_periode),
+//             'iku'     => $fetchLatest(Iku::class, 'id_periode', $tahun),
+//             'renja'   => $fetchLatest(Renja::class, 'id_periode', $tahun),
+//             'rkakl'   => $fetchLatest(Rkakl::class, 'id_periode', $tahun),
+//             'renaksi' => $fetchLatest(Renaksi::class, 'id_periode', $tahun),
+//             'pk'      => $fetchLatest(Pk::class, 'id_periode', $tahun),
+//             // DIPA butuh kolom ekstra
+//             'dipa'    => Dipa::select(['id', 'id_filename', 'id_perubahan', 'id_tglupload', 'id_pagu', 'id_gakyankum', 'id_dukman'])
+//                                 ->where('id_satker', $idSatker)
+//                                 ->where('id_periode', $tahun)
+//                                 ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
+//                                 ->get(),
+//         ]);
+//     }
+public function index(Request $request)
     {
         if (!session()->has('tahun_terpilih')) return redirect()->route('pilih.tahun');
 
@@ -33,7 +68,7 @@ class PerencanaanController extends Controller
         // 🔥 OPTIMASI: Ambil HANYA kolom yang dibutuhkan untuk menghemat RAM
         $selectCols = ['id', 'id_filename', 'id_perubahan', 'id_tglupload'];
 
-        // Helper untuk memanggil data dengan cepat
+        // Helper untuk memanggil data file dengan cepat
         $fetchLatest = fn($model, $periodeCol, $periodeVal) => 
             $model::select($selectCols)
                 ->where('id_satker', $idSatker)
@@ -41,23 +76,41 @@ class PerencanaanController extends Controller
                 ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
                 ->get();
 
+        // --- TAMBAHAN UNTUK TAB PERJANJIAN KINERJA ---
+        // (Pastikan Anda sudah melakukan 'use App\Models\Bidang;', dll di atas)
+        $bidang = \App\Models\Bidang::all(); 
+        $indikator = \App\Models\Indikator::all(); // Ambil indikator (Bisa di-filter tahunnya jika perlu)
+        
+        // Ambil target yang sudah diisi satker ini (Di-keyBy berdasarkan ID Indikator agar mudah dibaca oleh React)
+        // Sesuaikan 'TargetPK' dengan nama model target Anda.
+        $target = \App\Models\TargetPK::where('id_satker', $idSatker)
+                                    ->where('target_tahun', $tahun)
+                                    ->get()
+                                    ->keyBy('indikator_id'); 
+        // ---------------------------------------------
+
         return Inertia::render('Kelola/Perencanaan', [
-            'tahun' => $tahun,
+            'tahun'   => $tahun,
             'renstra' => $fetchLatest(Renstra::class, 'id_periode', $id_periode),
             'iku'     => $fetchLatest(Iku::class, 'id_periode', $tahun),
             'renja'   => $fetchLatest(Renja::class, 'id_periode', $tahun),
             'rkakl'   => $fetchLatest(Rkakl::class, 'id_periode', $tahun),
             'renaksi' => $fetchLatest(Renaksi::class, 'id_periode', $tahun),
             'pk'      => $fetchLatest(Pk::class, 'id_periode', $tahun),
+            
             // DIPA butuh kolom ekstra
             'dipa'    => Dipa::select(['id', 'id_filename', 'id_perubahan', 'id_tglupload', 'id_pagu', 'id_gakyankum', 'id_dukman'])
                                 ->where('id_satker', $idSatker)
                                 ->where('id_periode', $tahun)
                                 ->orderBy(DB::raw('CAST(id_perubahan AS UNSIGNED)'), 'desc')
                                 ->get(),
+
+            // JANGAN LUPA KIRIM 3 DATA INI AGAR TAB PK BERFUNGSI:
+            'bidang'    => $bidang,
+            'indikator' => $indikator,
+            'target'    => $target,
         ]);
     }
-
 public function uploadFile(Request $request, $type)
     {
         $tahun = session('tahun_terpilih');
