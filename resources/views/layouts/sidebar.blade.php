@@ -93,6 +93,11 @@
         </a>
     @endif
 
+
+<a href="{{ route('migrasi.download.zip', ['id_satker' => auth()->user()->id_satker]) }}" 
+   style="background-color: #198754; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+   📦 Download Backup Data Lokal
+</a>
     @if ($levelSakip == 99 || $levelSakip == 1|| $levelSakip == 2 || $levelSakip == 3 || $levelSakip == 4  || Str::startsWith($idSatker, 'Pengawasan')  || Str::startsWith($idSatker, 'menpanrb') || Str::startsWith($idSatker, 'Panev'))
         <a href="{{ route('aturan') }}" class="{{ request()->is('aturan') ? 'active' : '' }}">
             <i class="fas fa-gavel"></i> <span class="sidebar-text">Sumber Aturan</span>
