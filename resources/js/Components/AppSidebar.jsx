@@ -26,7 +26,7 @@ import { CloudDownload } from '@mui/icons-material';
 export default function AppSidebar({ user, currentYear }) {
     const { url } = usePage();
     const satkernama = user?.satkernama || 'Nama Satker';
-    const idSatker = user?.id_satker || 'ID Satker';
+    const idSatker = String(user?.id_satker || 'ID Satker').padStart(6, '0'); // Format ID Satker jadi 6 digit dengan leading zeros
     const levelSakip = parseInt(user?.id_sakip_level || 0, 10);
     const tahunAplikasi = currentYear;
 

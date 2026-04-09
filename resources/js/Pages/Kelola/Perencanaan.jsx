@@ -21,7 +21,7 @@ function TabPanel(props) {
 }
 
 export default function Perencanaan() {
-    const { auth, flash = {}, tahun, renstra, iku, renja, rkakl, dipa, renaksi, indikator, target, bidang, pk } = usePage().props;
+    const { auth, flash = {}, tahun, renstra, iku, renja, rkakl, dipa, renaksi, indikator, target, bidang, pk, id_satker } = usePage().props;
     const levelSakip = parseInt(auth.user?.id_sakip_level || 0, 10);
     
     // State untuk tab aktif (default ke 'renstra' seperti di Blade)

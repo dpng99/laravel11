@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-
+import FileLinkButton from '@/Components/FileLinkButton';
 // Sub-komponen Tabel File
 function FilesTable({ files, fileNamePrefix, tahun, idSatker, deleteRoutePrefix }) {
     return (
@@ -35,14 +35,9 @@ function FilesTable({ files, fileNamePrefix, tahun, idSatker, deleteRoutePrefix 
                             <TableRow key={file.id} hover>
                                 <TableCell>{index + 1}</TableCell>
                                 <TableCell>
-                                    <a 
-                                        href={`/file/view/${idSatker}/${file.id_filename}`} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        style={{ textDecoration: 'none', color: '#1976d2', fontWeight: 500 }}
-                                    >
-                                        {fileNamePrefix} ({tahun}) - {file.id_triwulan || file.triwulan}
-                                    </a>
+                                    <FileLinkButton satkerId={idSatker} fileName={file.id_filename}>
+                                        {`${fileNamePrefix} (${tahun}) ${file.id_triwulan ? `- ${file.id_triwulan}` : ''}`}
+                                    </FileLinkButton>
                                 </TableCell>
                                 <TableCell>{file.id_triwulan || file.triwulan}</TableCell>
                                 <TableCell>{file.id_perubahan}</TableCell>

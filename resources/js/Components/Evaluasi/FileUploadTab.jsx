@@ -6,7 +6,7 @@ import {
     InputLabel, Select, MenuItem, LinearProgress, Typography, Paper, 
     TableContainer, Table, TableHead, TableBody, TableRow, TableCell, Collapse
 } from '@mui/material';
-
+import FileLinkButton from '@/Components/FileLinkButton';
 // Komponen Tabel
 function FilesTable({ files, fileNamePrefix, tahun, idSatker, showTriwulan }) {
     return (
@@ -33,10 +33,9 @@ function FilesTable({ files, fileNamePrefix, tahun, idSatker, showTriwulan }) {
                             <TableRow key={file.id} hover>
                                 <TableCell>{index + 1}</TableCell>
                                 <TableCell>
-                                    <a href={`/uploads/repository/${idSatker}/${file.id_filename}`} target="_blank" rel="noopener noreferrer">
-                                        {fileNamePrefix} ({tahun})
-                                        {showTriwulan && file.id_triwulan && ` - ${file.id_triwulan}`}
-                                    </a>
+                                    <FileLinkButton satkerId={idSatker} fileName={file.id_filename}>
+                                        {`${fileNamePrefix} (${tahun}) ${showTriwulan && file.id_triwulan ? `- ${file.id_triwulan}` : ''}`}
+                                    </FileLinkButton>
                                 </TableCell>
                                 {showTriwulan && <TableCell>{file.id_triwulan || '-'}</TableCell>}
                                 <TableCell>{file.id_perubahan}</TableCell>

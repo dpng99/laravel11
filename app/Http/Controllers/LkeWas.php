@@ -6,13 +6,48 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use App\Models\LheAkip;
-use App\Models\TlLheAkip;
-use App\Models\MonevRenaksi;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Storage; // Wajib: Google Drive
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Redirect;
+use App\Models\{
+    absen_pm, ba_pleno, ba_praeval, DataLke1, Dipa, Iku, lhe_2023, LheAkip, 
+    lke_subkomponens, lke_buktidukung, lke_komponen, Lkjip, memo_datakinerja, 
+    memo_lkjip, MonevRenaksi, nodis_eval_sakip, nodis_p_sakip, notulensi_pm, 
+    Pk, PokinRanwal, Renaksi, Renja, Renstra, reward_punish, Rkakl, sampel_rekom, 
+    sample_skp, sk_pk, sk_pm, tar_pm, TlLheAkip, tar_lkjip, ss_perencanaan, 
+    ss_laporanweb, ss_laporanapp, nodis_datakinerja, RapatStaffEka
+};
+
 class LkeWas extends Controller
 {
+     private function getMapping()
+    {
+        return [
+            1 => Renstra::class, 2 => Renja::class, 3 => Renaksi::class, 4 => Rkakl::class,
+            5 => Dipa::class, 6 => Pk::class, 7 => Pk::class, 8 => Iku::class, 9 => Iku::class,
+            10 => Lkjip::class, 11 => Lkjip::class, 12 => LheAkip::class,
+            13 => RapatStaffEka::class, 14 => RapatStaffEka::class,
+            15 => LheAkip::class, 16 => LheAkip::class, 17 => TlLheAkip::class,
+            18 => MonevRenaksi::class, 19 => MonevRenaksi::class, 20 => PokinRanwal::class,
+            21 => Renstra::class, 22 => Lkjip::class, 23 => sample_skp::class,
+            24 => sk_pm::class, 25 => sk_pk::class, 26 => absen_pm::class,
+            27 => notulensi_pm::class, 28 => nodis_p_sakip::class, 29 => nodis_eval_sakip::class,
+            30 => memo_datakinerja::class, 31 => nodis_datakinerja::class, 32 => reward_punish::class,
+            33 => sampel_rekom::class, 34 => ss_perencanaan::class, 35 => ss_laporanweb::class,
+            36 => ss_laporanapp::class, 37 => tar_lkjip::class, 38 => tar_lkjip::class,
+            39 => memo_lkjip::class, 40 => memo_lkjip::class, 41 => tar_pm::class,
+            42 => ba_praeval::class, 43 => ba_pleno::class, 44 => LheAkip::class, 
+        ];
+    }
+
+    private function getTriwulanMapping()
+    {
+        return [
+            10 => 'TW 1', 11 => 'TW 2', 12 => 'TW 4', 13 => 'TW 1', 14 => 'TW 2',
+            18 => 'TW 1', 19 => 'TW 2', 37 => 'TW 1', 38 => 'TW 2', 39 => 'TW 1', 40 => 'TW 2',
+        ];
+    }
     public function index()
     {  if(!session()->has('tahun_terpilih')) {
             return redirect()->route('pilih.tahun');
@@ -57,107 +92,135 @@ class LkeWas extends Controller
 
     public function listBuktiDukung(Request $request)
     {
-        
-        // Cek apakah tahun sudah dipilih
-        if (!session()->has('tahun_terpilih')) {
-            return redirect()->route('pilih.tahun');
-        }
-        // Ambil tahun yang dipilih dari session
+        if (!session()->has('tahun_terpilih')) return redirect()->route('pilih.tahun');
+
         $tahun = session('tahun_terpilih');
         $idSatker = $request->id_satker;
 
-        $lheAkipFiles = LheAkip::orderBy('id_tglupload', 'desc')->get();
-        $lheAkipFiles = LheAkip::where('id_satker', $idSatker)
-            ->where('id_periode', $tahun)
-            ->orderBy('id_tglupload', 'desc')
-            ->get();
-        $tlLheAkipFiles = TLLheAkip::where('id_satker', $idSatker)
-            ->where('id_periode', $tahun)
-            ->orderBy('id_tglupload', 'desc')
-            ->get();
-        $monevRenaksiFiles = MonevRenaksi::where('id_periode', $tahun)
-            ->where('id_satker', $idSatker)
-            ->orderBy('id_perubahan', 'desc')
-            ->get();
+        // Ambil nama satker
+        $nama_satker = DB::table('sinori_login')->where('id_satker', $idSatker)->value('satkernama');
+        $satkernama = str_replace('_', ' ', $nama_satker);
 
-        // === Ambil dokumen bukti dukung (group by kriteria) ===
-        $buktiDukung = DB::table('bukti_dukung')
-            ->where('id_satker', $idSatker)
-            ->get()
-            ->groupBy('id_kriteria');
+        // ==========================================
+        // 🚀 ALGORITMA MEMBACA FILE DARI SISTEM (CLONING EVALUASI CONTROLLER)
+        // ==========================================
+        // Pastikan Anda sudah mengimport model \App\Models\lke_komponen di atas
+        $lkeHierarki = \App\Models\lke_komponen::with(['subKomponens.kriterias.buktiDukungs'])
+                        ->orderBy('id', 'asc')->get();
 
-        // === Ambil semua kriteria yang punya format_nama_file ===
-        $kriteria = DB::table('kriteria')->get();
+        $modelMapping = $this->getMapping();
+        $triwulanMapping = $this->getTriwulanMapping();
 
-        foreach ($kriteria as $row) {
-    if (!$row->format_nama_file) continue;
+        // 1. Tarik Data Dictionary
+        $allBuktiDukung = DB::table('bukti_dukung')->where('id_satker', $idSatker)->get();
+        $sysAvailabilityCache = [];
+        $lkeDataFlat = collect([]);
 
-    $formats = array_map('trim', explode(';', $row->format_nama_file));
+        // 2. Looping Pengecekan Akurat
+        foreach ($lkeHierarki as $komponen) {
+            foreach ($komponen->subKomponens as $sub) {
+                foreach ($sub->kriterias as $kriteria) {
+                    $buktiList = [];
+                    foreach ($kriteria->buktiDukungs as $buktiRef) {
+                        $kode = $buktiRef->id;
+                        $status = 'Tidak Ada';
+                        $fileLink = null;
 
-    foreach ($formats as $format) {
-        $regex = '/^' . str_replace('_', '.*', preg_quote($format, '/')) . '/i';
+                        $buktiLke = $allBuktiDukung->where('kode_bukti', $kode)->first();
+                        
+                        if (!$buktiLke) {
+                            $buktiLke = $allBuktiDukung->where('id_kriteria', $kriteria->kode)
+                                                       ->whereIn('kode_bukti', [null, 0, ''])
+                                                       ->first();
+                        }
 
-        $dokumenList = DB::table('bukti_dukung')
-            ->where('id_satker', $idSatker)
-            ->where('id_kriteria', $row->id)
-            ->get()
-            ->filter(fn($d) => preg_match($regex, $d->link_bukti_dukung));
+                        if ($buktiLke && !empty($buktiLke->link_bukti_dukung)) {
+                            $status = 'Ada';
+                            $fileLink = url("/file/view/{$idSatker}/" . urlencode($buktiLke->link_bukti_dukung));
+                        } else {
+                            if (isset($modelMapping[$kode])) {
+                                if (!array_key_exists($kode, $sysAvailabilityCache)) {
+                                    $sysAvailabilityCache[$kode] = $this->checkSystemAvailability($kode, $idSatker, $tahun, $modelMapping, $triwulanMapping);
+                                }
+                                
+                                if ($sysAvailabilityCache[$kode]) {
+                                    $status = 'Tersedia di Sistem (Belum Verif)';
+                                }
+                            }
+                        }
 
-        if ($dokumenList->isNotEmpty()) {
-            if (!isset($buktiDukung[$row->id])) {
-                $buktiDukung[$row->id] = collect();
-            }
-            foreach ($dokumenList as $dok) {
-                $buktiDukung[$row->id]->push($dok);
+                        $buktiList[] = [
+                            'kode_bukti' => $kode,
+                            'nama_dokumen' => $buktiRef->dokumen,
+                            'status' => $status,
+                            'file_link' => $fileLink,
+                        ];
+                    }
+
+                    $item = new \stdClass();
+                    $item->id_komponen = $komponen->id;
+                    $item->nama_komponen = $komponen->nama; 
+                    $item->id_sub_komponen = $sub->kode; 
+                    $item->nama_subkomponen = $sub->nama; 
+                    $item->id_kriteria = $kriteria->id;
+                    $item->kode_kriteria = $kriteria->kode;
+                    $item->nama_kriteria = $kriteria->nama;
+                    $item->bukti_list = $buktiList;
+
+                    $lkeDataFlat->push($item);
+                }
             }
         }
+
+        // 3. Grouping agar Frontend mudah membaca
+        $lkeGrouped = $lkeDataFlat->groupBy('id_komponen')->map(fn($subItems) => $subItems->groupBy('id_sub_komponen'));
+
+        // 4. Ambil File Ekstra
+        $lheAkipFiles = \App\Models\LheAkip::select('id', 'id_filename', 'id_periode', 'id_perubahan', 'id_tglupload')
+            ->where('id_satker', $idSatker)->where('id_periode', $tahun)->orderByDesc('id')->get();
+            
+        $tlLheAkipFiles = \App\Models\TlLheAkip::select('id', 'id_filename', 'id_periode', 'id_perubahan', 'id_tglupload')
+            ->where('id_satker', $idSatker)->where('id_periode', $tahun)->orderByDesc('id')->get();
+            
+        $monevRenaksiFiles = \App\Models\MonevRenaksi::select('id', 'id_filename', 'id_periode', 'id_perubahan', 'id_triwulan', 'id_tglupload')
+            ->where('id_satker', $idSatker)->where('id_periode', $tahun)->orderByDesc('id_perubahan')->get();
+
+        return Inertia::render('EvalWas/EvalWas', [
+            'tahun' => $tahun,
+            'idSatker' => $idSatker,
+            'satkernama' => $satkernama,
+            'lkeGrouped' => $lkeGrouped, // <--- Data sakti kita kirim ke Frontend
+            'lheAkipFiles' => $lheAkipFiles,
+            'tlLheAkipFiles' => $tlLheAkipFiles,
+            'monevRenaksiFiles' => $monevRenaksiFiles
+        ]);
     }
-}
+    private function checkSystemAvailability($kode, $idSatker, $tahun, $modelMapping, $triwulanMapping)
+    {
+        $modelClass = $modelMapping[$kode];
+        $query = $modelClass::where('id_satker', $idSatker);
 
+        if (in_array($kode, [7, 12, 15, 17])) $query->where('id_periode', '2024'); 
+        else $query->where('id_periode', $tahun);
 
+        if (isset($triwulanMapping[$kode])) {
+            $valTw = $triwulanMapping[$kode];           
+            $valAngka = str_replace('TW ', '', $valTw); 
+            $query->where(function($q) use ($valTw, $valAngka) {
+                $tableName = $q->getModel()->getTable();
+                if (Schema::hasColumn($tableName, 'id_triwulan')) $q->where('id_triwulan', $valTw);
+                elseif (Schema::hasColumn($tableName, 'triwulan')) $q->where('triwulan', $valAngka);
+            });
+        }
 
-        $komponen = DB::table('komponen')
-            ->leftJoin('sub_komponen', 'komponen.id', '=', 'sub_komponen.id_komponen')
-            ->leftJoin('kriteria', 'sub_komponen.id_subkomponen', '=', 'kriteria.id_sub_komponen')
-            ->select(
-                'komponen.id as id_komponen',
-                'komponen.nama_komponen',
-                'sub_komponen.id_subkomponen',
-                'sub_komponen.nama_subkomponen',
-                'kriteria.id as id_kriteria',
-                'kriteria.nama_kriteria',
-                'kriteria.kode',
-                'kriteria.bukti_pengisian',
-                'kriteria.format_nama_file' // ini penting biar dipakai untuk nama file
-            )
-            ->orderBy('komponen.id')
-            ->orderBy('sub_komponen.id_subkomponen')
-            ->orderBy('kriteria.id')
-            ->get();
+        $tableName = $query->getModel()->getTable();
+        if (in_array($kode, [1, 6, 8, 18])) { 
+            if (Schema::hasColumn($tableName, 'id_perubahan')) $query->where('id_perubahan', 0);
+        } elseif (!in_array($kode, [21, 7, 9, 19]) && Schema::hasColumn($tableName, 'id_perubahan')) {
+            $query->orderBy('id_perubahan', 'desc');
+        }
 
-
-        // Tambahkan info jumlah kebutuhan vs realisasi
-        $komponen->transform(function ($item) use ($buktiDukung) {
-            // pecah kebutuhan dari kriteria
-            $kebutuhan = $item->bukti_pengisian
-                ? array_map('trim', explode(';', $item->bukti_pengisian))
-                : [];
-
-            // dokumen realisasi
-            $realisasi = isset($buktiDukung[$item->id_kriteria])
-                ? $buktiDukung[$item->id_kriteria]
-                : collect();
-
-            $item->jumlah_kebutuhan = count($kebutuhan);
-            $item->jumlah_realisasi = $realisasi->count();
-            $item->persen_terpenuhi = $item->jumlah_kebutuhan > 0
-                ? round(($item->jumlah_realisasi / $item->jumlah_kebutuhan) * 100, 2)
-                : 0;
-
-            return $item;
-        });
-                $nama_satker = DB::table('sinori_login')->where('id_satker', $idSatker)->value('satkernama');
-        $satkernama = str_replace('_', ' ', $nama_satker);
-        return Inertia::render('EvalWas/EvalWas', ['tahun' => $tahun, 'lheAkipFiles' => $lheAkipFiles, 'monevRenaksiFiles' => $monevRenaksiFiles, 'tlLheAkipFiles' => $tlLheAkipFiles, 'komponen' => $komponen, 'idSatker' => $idSatker, 'buktiDukung' => $buktiDukung, 'satkernama' => $satkernama]);
+        // Return first data only
+        return Schema::hasColumn($tableName, 'id_perubahan') ? $query->first() : $query->latest()->first();
     }
 }

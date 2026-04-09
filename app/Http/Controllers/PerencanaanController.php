@@ -88,7 +88,7 @@ public function index(Request $request)
                                     ->get()
                                     ->keyBy('indikator_id'); 
         // ---------------------------------------------
-
+        $idSatkerFormatted = str_pad((string)$idSatker, 6, "0", STR_PAD_LEFT);
         return Inertia::render('Kelola/Perencanaan', [
             'tahun'   => $tahun,
             'renstra' => $fetchLatest(Renstra::class, 'id_periode', $id_periode),
@@ -97,7 +97,7 @@ public function index(Request $request)
             'rkakl'   => $fetchLatest(Rkakl::class, 'id_periode', $tahun),
             'renaksi' => $fetchLatest(Renaksi::class, 'id_periode', $tahun),
             'pk'      => $fetchLatest(Pk::class, 'id_periode', $tahun),
-            
+            'id_satker' => $idSatkerFormatted, // Kirim ID Satker yang sudah diformat untuk link file
             // DIPA butuh kolom ekstra
             'dipa'    => Dipa::select(['id', 'id_filename', 'id_perubahan', 'id_tglupload', 'id_pagu', 'id_gakyankum', 'id_dukman'])
                                 ->where('id_satker', $idSatker)

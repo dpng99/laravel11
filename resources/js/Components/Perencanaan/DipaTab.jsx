@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-
+import FileLinkButton from '@/Components/FileLinkButton';
 // Helper format angka
 const formatNumber = (value) => {
   if (!value) return '';
@@ -145,9 +145,9 @@ export default function DipaTab({ dipaFiles, flashMessage, tahun, idSatker, onEd
                                 <TableRow key={file.id} hover>
                                     <TableCell>{index + 1}</TableCell>
                                     <TableCell>
-                                        <a href={`/uploads/repository/${idSatker}/${file.id_filename}`} target="_blank" rel="noopener noreferrer">
-                                            DIPA {file.id_periode}
-                                        </a>
+                                        <FileLinkButton satkerId={idSatker} fileName={file.id_filename}>
+                                            {`DIPA-${tahun}`} 
+                                        </FileLinkButton>
                                     </TableCell>
                                     <TableCell>Rp. {formatNumber(file.id_pagu)}</TableCell>
                                     <TableCell>Rp. {formatNumber(file.id_gakyankum)}</TableCell>

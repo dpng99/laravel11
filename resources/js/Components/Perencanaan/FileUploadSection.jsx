@@ -6,7 +6,7 @@ import {
     TableContainer, Table, TableHead, TableBody, TableRow, TableCell, IconButton, Collapse
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
-
+import FileLinkButton from '@/Components/FileLinkButton';
 export default function FileUploadSection({
     title, description, uploadRoute, fileInputName, files, 
     flashMessage, tahun, idSatker, fileNamePrefix, 
@@ -108,10 +108,11 @@ export default function FileUploadSection({
                                 <TableRow key={file.id || index} hover>
                                     <TableCell>{index + 1}</TableCell>
                                     <TableCell>
-                                        {/* 🔥 UPDATE LINK: Mengarah ke file/view untuk baca dari Google Drive */}
-                                        <a href={`/file/view/${idSatker}/${file.id_filename}`} target="_blank" rel="noopener noreferrer">
-                                            {fileNamePrefix} ({file.id_periode})
-                                        </a>
+                                        {/*UPDATE LINK: Mengarah ke file/view untuk baca dari Google Drive */}
+                                       
+                                        <FileLinkButton satkerId={idSatker} fileName={file.id_filename}>
+                                            {`${fileNamePrefix} (${tahun}) ${file.triwulan ? `- ${file.triwulan}` : ''}`}
+                                        </FileLinkButton>
                                     </TableCell>
                                     <TableCell>{file.id_perubahan}</TableCell>
                                     <TableCell>{file.id_tglupload}</TableCell>

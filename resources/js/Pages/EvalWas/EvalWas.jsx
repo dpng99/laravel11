@@ -1,183 +1,175 @@
-// resources/js/Pages/Kelola/EvaluasiWas.jsx
 import React, { useMemo } from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
-// Import komponen Material-UI
 import {
     Card, CardHeader, CardContent, Button, Typography, Paper, Box,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    List, ListItem, ListItemIcon, ListItemText
+    List, ListItem, ListItemIcon, Chip
 } from '@mui/material';
 
-// Import Ikon
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
-
-// Helper untuk mengelompokkan data
-const groupBy = (array, key) => {
-    return array.reduce((result, currentValue) => {
-        (result[currentValue[key]] = result[currentValue[key]] || []).push(currentValue);
-        return result;
-    }, {});
-};
+import InfoIcon from '@mui/icons-material/Info';
 
 export default function EvalWas() {
-    // Ambil props dari LkeWasController@listBuktiDukung
-    const { komponen, satkernama, idSatker, buktiDukung } = usePage().props;
+    // Ambil lkeGrouped dari LkeWas backend yang baru
+    const { lkeGrouped, satkernama, tahun } = usePage().props;
 
-    // --- Logika RowSpan (diadaptasi dari Blade) ---
-    // Kita memproses data 'komponen' sekali untuk menghitung rowspans
-    const processedData = useMemo(() => {
-        if (!komponen) return [];
-        
-        const groupedKomponen = groupBy(komponen, 'id_komponen');
-        let dataWithRowspans = [];
-        let noCounter = 1; // Untuk kolom "No"
+    // === LOGIKA ROWSPAN (Dioptimalkan untuk membaca lkeGrouped) ===
+    const tableRows = useMemo(() => {
+        let rows = [];
+        let no = 1;
 
-        Object.values(groupedKomponen).forEach((dataKomponen) => {
-            const komponenRowspan = dataKomponen.length;
-            const groupedSub = groupBy(dataKomponen, 'id_subkomponen');
+        if (!lkeGrouped) return [];
 
-            Object.values(groupedSub).forEach((dataSub, subIndex) => {
-                const subRowspan = dataSub.length;
+        Object.values(lkeGrouped).forEach(subKomponens => {
+            let isFirstKomponen = true;
+            let totalKomponenRows = 0;
 
-                dataSub.forEach((row, rowIndex) => {
-                    dataWithRowspans.push({
-                        ...row,
-                        // Tentukan rowspan untuk Komponen (hanya di baris pertama)
-                        komponenRowspan: (subIndex === 0 && rowIndex === 0) ? komponenRowspan : 0,
-                        // Tentukan Nomor Komponen (hanya di baris pertama)
-                        komponenNo: (subIndex === 0 && rowIndex === 0) ? noCounter : 0,
-                        // Tentukan rowspan untuk Subkomponen (di baris pertama setiap sub-grup)
-                        subRowspan: (rowIndex === 0) ? subRowspan : 0,
+            Object.values(subKomponens).forEach(kriterias => {
+                totalKomponenRows += kriterias.length;
+            });
+
+            Object.values(subKomponens).forEach(kriterias => {
+                let isFirstSub = true;
+
+                kriterias.forEach((kriteria) => {
+                    rows.push({
+                        ...kriteria,
+                        rowspanKomponen: isFirstKomponen ? totalKomponenRows : 0,
+                        rowspanSub: isFirstSub ? kriterias.length : 0,
+                        displayNo: isFirstKomponen ? no : null,
                     });
+                    
+                    isFirstKomponen = false; 
+                    isFirstSub = false;
                 });
             });
-            noCounter++; // Naikkan nomor komponen setelah selesai
+            no++;
         });
-        return dataWithRowspans;
-    }, [komponen]);
-    // ---------------------------------------------
+        return rows;
+    }, [lkeGrouped]);
 
     return (
         <AuthenticatedLayout>
-            <Head title={`LKE ${satkernama}`} />
+            <Head title={`Evaluasi & Pengawasan - ${satkernama}`} />
+
+            <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Button
+                    component={Link}
+                    href="/was-lke" 
+                    variant="outlined"
+                    startIcon={<ArrowBackIcon />}
+                    sx={{ bgcolor: 'white' }}
+                >
+                    Kembali
+                </Button>
+                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                    Monitoring SAKIP: {satkernama} ({tahun})
+                </Typography>
+            </Box>
 
             <Card elevation={3}>
                 <CardHeader
-                    title="LKE - Pengawasan"
-                    titleTypographyProps={{ variant: 'h5', align: 'center', fontWeight: 'bold' }}
-                    sx={{ backgroundColor: 'primary.main', color: 'white' }}
+                    title="Daftar Ketersediaan Bukti Dukung (Monitor APIP)"
+                    sx={{ backgroundColor: '#e6bf3e', color: 'black' }}
+                    titleTypographyProps={{ fontWeight: 'bold' }}
                 />
                 <CardContent>
-                    <Typography variant="h6">
-                        Bukti Dukung pada Kejaksaan Negeri {satkernama}
-                    </Typography>
-                    <Typography paragraph sx={{ mt: 1 }}>
-                        Halaman ini digunakan untuk melihat dokumen/bukti dukung setiap satuan kerja...
-                    </Typography>
-                    
-                    {/* Tombol Kembali */}
-                    <Button
-                        component={Link}
-                        href="/was-lke" // URL (tanpa Ziggy) ke halaman index
-                        variant="contained"
-                        color="secondary"
-                        startIcon={<ArrowBackIcon />}
-                        sx={{ mb: 2 }}
-                    >
-                        Kembali
-                    </Button>
-
-                    {/* Tabel LKE */}
-                    <TableContainer component={Paper} elevation={2}>
-                        <Table stickyHeader>
+                    <TableContainer component={Paper} sx={{ maxHeight: '75vh', mt: 2 }}>
+                        <Table stickyHeader size="small">
                             <TableHead>
-                                <TableRow sx={{ '& th': { backgroundColor: 'success.main', color: 'white', fontWeight: 'bold' } }}>
-                                    <TableCell>No</TableCell>
-                                    <TableCell>Komponen</TableCell>
-                                    <TableCell>Subkomponen</TableCell>
-                                    <TableCell>Kode Kriteria</TableCell>
-                                    <TableCell>Kriteria</TableCell>
-                                    <TableCell>Dokumen Bukti Dukung</TableCell>
+                                <TableRow sx={{ '& th': { bgcolor: '#f5f5f5', fontWeight: 'bold' } }}>
+                                    <TableCell width="5%" align="center">No</TableCell>
+                                    <TableCell width="15%">Komponen</TableCell>
+                                    <TableCell width="15%">Sub Komponen</TableCell>
+                                    <TableCell width="10%">Kode</TableCell>
+                                    <TableCell width="25%">Kriteria</TableCell>
+                                    <TableCell width="30%">Status Dokumen</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {processedData.map((row) => {
-                                    // Siapkan data dokumen (logika dari Blade)
-                                    const needs = (row.bukti_pengisian || '').split(';').map(s => s.trim()).filter(Boolean);
-                                    const formats = (row.format_nama_file || '').split(';').map(s => s.trim());
-                                    const uploaded = buktiDukung[row.id_kriteria] || [];
-
-                                    return (
-                                        <TableRow key={row.id_kriteria} hover>
-                                            
-                                            {/* Kolom No (Render HANYA jika rowspan > 0) */}
-                                            {row.komponenRowspan > 0 && (
-                                                <TableCell rowSpan={row.komponenRowspan} sx={{ verticalAlign: 'top' }}>
-                                                    {row.komponenNo}
-                                                </TableCell>
-                                            )}
-                                            {/* Kolom Komponen (Render HANYA jika rowspan > 0) */}
-                                            {row.komponenRowspan > 0 && (
-                                                <TableCell rowSpan={row.komponenRowspan} sx={{ verticalAlign: 'top' }}>
-                                                    {row.nama_komponen}
-                                                </TableCell>
-                                            )}
-                                            {/* Kolom Subkomponen (Render HANYA jika rowspan > 0) */}
-                                            {row.subRowspan > 0 && (
-                                                <TableCell rowSpan={row.subRowspan} sx={{ verticalAlign: 'top' }}>
-                                                    {row.nama_subkomponen}
-                                                </TableCell>
-                                            )}
-                                            
-                                            {/* Kolom Kriteria (Selalu render) */}
-                                            <TableCell>{row.kode}</TableCell>
-                                            <TableCell>{row.nama_kriteria}</TableCell>
-                                            
-                                            {/* Kolom Dokumen Bukti Dukung */}
-                                            <TableCell>
-                                                <List dense disablePadding>
-                                                    {needs.map((need, i) => {
-                                                        const pattern = formats[i] || '';
-                                                        const prefix = pattern.split(/[_\s]/)[0]?.toLowerCase() || pattern;
-                                                        // Cari dokumen yang cocok
-                                                        const dok = uploaded.find(d => 
-                                                            d.link_bukti_dukung.toLowerCase().includes(prefix)
-                                                        );
-
-                                                        return (
-                                                            <ListItem key={i} disableGutters>
-                                                                <ListItemIcon sx={{ minWidth: 30 }}>
-                                                                    {dok ? 
-                                                                        <CheckCircleIcon color="success" fontSize="small" /> : 
-                                                                        <CancelIcon color="error" fontSize="small" />
-                                                                    }
-                                                                </ListItemIcon>
-                                                                {dok ? (
-                                                                    <Typography variant="body2" component="a" 
-                                                                        href={`/uploads/repository/${idSatker}/${dok.link_bukti_dukung}`} 
-                                                                        target="_blank" rel="noopener noreferrer"
-                                                                        sx={{ textDecoration: 'none', color: 'primary.main', '&:hover': { textDecoration: 'underline' } }}
-                                                                    >
-                                                                        {need}
-                                                                    </Typography>
-                                                                ) : (
-                                                                    <ListItemText 
-                                                                        primary={need} 
-                                                                        primaryTypographyProps={{ color: 'error.main', variant: 'body2' }} 
-                                                                    />
-                                                                )}
-                                                            </ListItem>
-                                                        );
-                                                    })}
-                                                </List>
+                                {tableRows.map((row, idx) => (
+                                    <TableRow key={idx} hover>
+                                        
+                                        {/* KOLOM 1: NOMOR */}
+                                        {row.rowspanKomponen > 0 && (
+                                            <TableCell rowSpan={row.rowspanKomponen} align="center" sx={{ verticalAlign: 'top', bgcolor: '#fffdf0', borderRight: '1px solid #e0e0e0', fontWeight: 'bold' }}>
+                                                {row.displayNo}
                                             </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
+                                        )}
+
+                                        {/* KOLOM 2: KOMPONEN */}
+                                        {row.rowspanKomponen > 0 && (
+                                            <TableCell rowSpan={row.rowspanKomponen} sx={{ verticalAlign: 'top', bgcolor: '#fffdf0', borderRight: '1px solid #e0e0e0', fontWeight: 'bold' }}>
+                                                {row.nama_komponen}
+                                            </TableCell>
+                                        )}
+
+                                        {/* KOLOM 3: SUB KOMPONEN */}
+                                        {row.rowspanSub > 0 && (
+                                            <TableCell rowSpan={row.rowspanSub} sx={{ verticalAlign: 'top', bgcolor: '#fafafa', borderRight: '1px solid #e0e0e0' }}>
+                                                {row.nama_subkomponen}
+                                            </TableCell>
+                                        )}
+
+                                        <TableCell sx={{ verticalAlign: 'top' }}>
+                                            <Chip label={row.kode_kriteria} size="small" variant="outlined" />
+                                        </TableCell>
+
+                                        <TableCell sx={{ verticalAlign: 'top' }}>
+                                            <Typography variant="body2">{row.nama_kriteria}</Typography>
+                                        </TableCell>
+
+                                        {/* KOLOM STATUS (Baca dari bukti_list backend) */}
+                                        <TableCell sx={{ verticalAlign: 'top' }}>
+                                            <List dense disablePadding>
+                                                {row.bukti_list && row.bukti_list.map((bukti, i) => (
+                                                    <ListItem key={i} disablePadding sx={{ py: 0.5, borderBottom: '1px dashed #eee' }}>
+                                                        <ListItemIcon sx={{ minWidth: 30 }}>
+                                                            {bukti.status === 'Ada' ? (
+                                                                <CheckCircleIcon color="success" fontSize="small" />
+                                                            ) : bukti.status === 'Tersedia di Sistem (Belum Verif)' ? (
+                                                                <InfoIcon color="warning" fontSize="small" />
+                                                            ) : (
+                                                                <CancelIcon color="error" fontSize="small" />
+                                                            )}
+                                                        </ListItemIcon>
+                                                        
+                                                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                                            <Typography variant="body2" sx={{ fontWeight: bukti.status === 'Ada' ? 'bold' : 'normal' }}>
+                                                                {bukti.nama_dokumen}
+                                                            </Typography>
+                                                            
+                                                            {/* Tampilkan Link PDF GDrive Jika 'Ada' */}
+                                                            {bukti.status === 'Ada' && bukti.file_link && (
+                                                                <Typography 
+                                                                    component="a" 
+                                                                    href={bukti.file_link}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    variant="caption"
+                                                                    sx={{ textDecoration: 'none', color: '#1976d2', cursor: 'pointer', fontWeight: 'bold', '&:hover': { textDecoration: 'underline' } }}
+                                                                >
+                                                                    [ Lihat Dokumen ]
+                                                                </Typography>
+                                                            )}
+
+                                                            {/* Tampilkan Teks Oranye Jika ada di Sistem tapi belum jadi PDF LKE */}
+                                                            {bukti.status === 'Tersedia di Sistem (Belum Verif)' && (
+                                                                <Typography variant="caption" sx={{ color: '#ed6c02', fontStyle: 'italic', fontWeight: 'bold' }}>
+                                                                    Terdeteksi di Database Sistem
+                                                                </Typography>
+                                                            )}
+                                                        </Box>
+                                                    </ListItem>
+                                                ))}
+                                            </List>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
                             </TableBody>
                         </Table>
                     </TableContainer>

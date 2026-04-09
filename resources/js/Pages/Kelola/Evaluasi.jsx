@@ -7,6 +7,9 @@ import { Box, Card, CardHeader, CardContent, Tabs, Tab, Typography, Alert } from
 // Impor komponen-komponen terpisah untuk setiap tab
 import LkeTabContent from '@/Components/Evaluasi/LkeTabContent';
 import FileUploadTab from '@/Components/Evaluasi/FileUploadTab';
+import FileLinkButton from '@/Components/FileLinkButton';
+
+// Di dalam tabel Perencanaan:
 
 // Helper untuk panel tab
 function TabPanel(props) {
