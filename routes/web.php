@@ -246,16 +246,16 @@ Route::get('/cek-gdrive', function () {
         }
         $log[] = "✅ Tahap 5 Lulus: Berhasil menghapus file percobaan.";
 
-        $log[] = "🎉 KESIMPULAN: Sistem Google Drive Anda 100% SEHAT dan SIAP DIGUNAKAN!";
+        $log[] = "KESIMPULAN: jalan";
 
         return response()->json([
-            'status' => 'SUPER_AMAN',
+            'status' => 'jalan',
             'catatan_sistem' => $log
         ], 200, [], JSON_PRETTY_PRINT);
 
     } catch (\Exception $e) {
-        $log[] = "❌ ERROR FATAL: " . $e->getMessage();
-        $log[] = "⚠️ KESIMPULAN: Sistem Google Drive mengalami kendala. Silakan cek pesan error di atas.";
+        $log[] = "ERROR : " . $e->getMessage();
+        $log[] = "KESIMPULAN: Sistem Google Drive mengalami kendala. Silakan cek pesan error di atas.";
         
         return response()->json([
             'status' => 'ADA_MASALAH',

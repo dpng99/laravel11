@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-
+use Inertia\Inertia;
 class FaqController extends Controller
 {
     public function index()
@@ -14,6 +14,6 @@ class FaqController extends Controller
         }
         // Ambil tahun yang dipilih dari session
         $tahun = session('tahun_terpilih');
-        return view('faq', ['tahun' => $tahun]);
+        return Inertia::render('Faq', ['tahun' => $tahun]);
     }
 }
