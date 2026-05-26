@@ -1,9 +1,8 @@
 <?php
 
 namespace App\Http\Controllers;
-use Illuminate\Support\Facades\Hash;
+
 use Illuminate\Http\Request;
-use App\Models\User;
 
 class UbahpasswordController extends Controller
 {
@@ -30,7 +29,6 @@ class UbahpasswordController extends Controller
     
         // Bandingkan password lama (pakai MD5)
         if (md5($request->current_password) !== $user->satkerpass) {
-            dd(md5($request->current_password), $user->satkerpass, $user->id_satker);
             return back()->withErrors(['current_password' => 'Password lama tidak cocok!']);
         }
     

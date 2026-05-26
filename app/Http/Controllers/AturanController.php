@@ -21,16 +21,23 @@ class AturanController extends Controller
         ]);
     }
 
+    public function create()
+    {
+        return Inertia::render('Aturan/Create');
+    }
+
     public function store(Request $request)
     {
         $request->validate([
             'id_namaproduk' => 'required|string|max:255',
+            'id_produsen'   => 'required|string|max:255',
             'id_tahun'      => 'required|numeric|digits:4',
             'file'          => 'required|file|mimes:pdf,doc,docx|max:10240', // Max 10MB
         ]);
 
         $data = [
             'id_namaproduk' => $request->id_namaproduk,
+            'id_produsen'   => $request->id_produsen,
             'id_tahun'      => $request->id_tahun,
         ];
 
@@ -40,6 +47,7 @@ class AturanController extends Controller
             $filename = Str::slug($request->id_namaproduk) . '_' . time() . '.' . $file->getClientOriginalExtension();
             
             // Simpan ke folder public/uploads/peraturan agar bisa diakses public
+            File::ensureDirectoryExists(public_path('uploads/peraturan'));
             $file->move(public_path('uploads/peraturan'), $filename);
             $data['id_filename'] = $filename;
         }
@@ -49,18 +57,27 @@ class AturanController extends Controller
         return redirect()->back()->with('success', 'Peraturan berhasil ditambahkan.');
     }
 
+    public function edit($id)
+    {
+        return Inertia::render('Aturan/Edit', [
+            'aturan' => Aturan::findOrFail($id),
+        ]);
+    }
+
     public function update(Request $request, $id)
     {
         $aturan = Aturan::findOrFail($id);
 
         $request->validate([
             'id_namaproduk' => 'required|string|max:255',
+            'id_produsen'   => 'required|string|max:255',
             'id_tahun'      => 'required|numeric|digits:4',
             'file'          => 'nullable|file|mimes:pdf,doc,docx|max:10240',
         ]);
 
         $data = [
             'id_namaproduk' => $request->id_namaproduk,
+            'id_produsen'   => $request->id_produsen,
             'id_tahun'      => $request->id_tahun,
         ];
 
@@ -73,6 +90,7 @@ class AturanController extends Controller
             // Upload file baru
             $file = $request->file('file');
             $filename = Str::slug($request->id_namaproduk) . '_' . time() . '.' . $file->getClientOriginalExtension();
+            File::ensureDirectoryExists(public_path('uploads/peraturan'));
             $file->move(public_path('uploads/peraturan'), $filename);
             $data['id_filename'] = $filename;
         }

@@ -5,7 +5,10 @@ import {
     Box, Typography, Paper, Accordion, AccordionSummary, AccordionDetails, 
     Grid, Card, CardContent, TextField, Button, Alert, Collapse 
 } from '@mui/material';
+import DescriptionIcon from '@mui/icons-material/Description';
+import DownloadIcon from '@mui/icons-material/Download';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import FileUploadSection from './FileUploadSection'; 
 
 // Komponen Form Target Per Indikator
@@ -57,6 +60,77 @@ function IndikatorTargetForm({ indikator, targetData }) {
     );
 }
 
+function PkDataActions() {
+    const { data, setData, post, processing, errors, reset } = useForm({
+        pk_import_file: null,
+    });
+    const [inputKey, setInputKey] = useState(Date.now());
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+
+        post('/perencanaan/pk/import-csv', {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                reset('pk_import_file');
+                setInputKey(Date.now());
+            },
+        });
+    };
+
+    return (
+        <Paper sx={{ p: 2, mb: 3 }} elevation={2}>
+            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Button
+                    variant="contained"
+                    color="success"
+                    component="a"
+                    href="/perencanaan/pk/export-csv"
+                    startIcon={<DownloadIcon />}
+                >
+                    Export CSV
+                </Button>
+                <Button
+                    variant="contained"
+                    color="primary"
+                    component="a"
+                    href="/perencanaan/pk/export-word"
+                    startIcon={<DescriptionIcon />}
+                >
+                    Export Word
+                </Button>
+                <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Button variant="outlined" component="label" startIcon={<UploadFileIcon />}>
+                        Pilih CSV
+                        <input
+                            key={inputKey}
+                            type="file"
+                            hidden
+                            name="pk_import_file"
+                            accept=".csv,text/csv"
+                            onChange={(e) => setData('pk_import_file', e.target.files[0])}
+                        />
+                    </Button>
+                    <Button type="submit" variant="contained" disabled={!data.pk_import_file || processing}>
+                        {processing ? 'Import...' : 'Import CSV'}
+                    </Button>
+                </Box>
+            </Box>
+            {data.pk_import_file && (
+                <Typography sx={{ mt: 1, fontStyle: 'italic' }} variant="body2">
+                    File: {data.pk_import_file.name}
+                </Typography>
+            )}
+            {errors.pk_import_file && (
+                <Typography color="error" variant="caption">
+                    {errors.pk_import_file}
+                </Typography>
+            )}
+        </Paper>
+    );
+}
+
 export default function PerjanjianKinerjaTab({ 
     pkFiles, flashMessage, flashMessageTarget, tahun, idSatker, onEditClick, 
     deleteRoutePrefix, bidangs, indikators, targets 
@@ -99,6 +173,8 @@ export default function PerjanjianKinerjaTab({
                 hideForm={tahun == 2024} 
             />
 
+            {tahun != 2024 && <PkDataActions />}
+
             {/* Bagian Accordion Form Target menggunakan Array Pengaman */}
             {tahun != 2024 && (
                 <Box sx={{ mt: 4 }}>
@@ -113,6 +189,8 @@ export default function PerjanjianKinerjaTab({
                             if (ind.tahun && typeof ind.tahun === 'string' && !ind.tahun.includes(tahunString)) return false;
                             
                             switch (levelSakip) {
+                                case 0:
+                                case 99: return true;
                                 case 1: return [0, 1].includes(ind.lingkup);
                                 case 2: return [0, 2, 5, 7].includes(ind.lingkup);
                                 case 3: return [0, 3, 5, 6, 7].includes(ind.lingkup);

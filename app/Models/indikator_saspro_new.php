@@ -16,7 +16,8 @@ class indikator_saspro_new extends Model
         'kode_sastra',
         'kode_saspro',
         'nama_indikator',
-
+        'link',
+        'lingkup'
         // 'deskripsi', // Tambahkan ini jika Anda berencana menambah kolom deskripsi nanti
     ];
 

@@ -15,8 +15,10 @@ class indikator_sastra_new extends Model
 
     protected $fillable = [
         'kode_sastra',      // Foreign Key ke sakip_sastra_new// Primary Key
-        'nama_indikator',
-        'deskripsi'
+        'nama_indikator',        
+        'deskripsi',
+        'link',
+        'lingkup'
     ];
     public $timestamps = false;
     /**

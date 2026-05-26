@@ -18,6 +18,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 export default function Aturan() {
     // Ambil props dari AturanController@index
     const { aturan, auth } = usePage().props;
+    const aturanRows = Array.isArray(aturan) ? aturan : (aturan?.data || []);
     
     // Dapatkan level user dan pastikan itu angka
     const levelSakip = parseInt(auth.user?.id_sakip_level || 0, 10);
@@ -79,8 +80,8 @@ export default function Aturan() {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {aturan.length > 0 ? (
-                                    aturan.map((item, index) => (
+                                {aturanRows.length > 0 ? (
+                                    aturanRows.map((item, index) => (
                                         <TableRow key={item.id} hover>
                                             <TableCell>{index + 1}</TableCell>
                                             <TableCell>

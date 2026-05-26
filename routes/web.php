@@ -28,7 +28,6 @@ use App\Http\Controllers\LkeWas;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Redirect;
 use App\Http\Controllers\DownloaderFile;
-use App\Http\Controllers\IndikatorViewController;
 use App\Http\Controllers\GoogleDriveController;
 use App\Service\GoogleService;
 /*
@@ -75,10 +74,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/perencanaan/indikator', 'showIndikator')->name('perencanaan.indikator');
         Route::post('/perencanaan/store', 'store')->name('perencanaan.store');
         Route::post('/target/store', 'storetarget')->name('target.store');
+        Route::get('/perencanaan/pk/export-csv', 'exportPkCsv')->name('perencanaan.pk.export-csv');
+        Route::post('/perencanaan/pk/import-csv', 'importPkCsv')->name('perencanaan.pk.import-csv');
+        Route::get('/perencanaan/pk/export-word', 'exportPkWord')->name('perencanaan.pk.export-word');
         Route::post('/perencanaan/update/{type}/{id}', 'updateFile')->name('perencanaan.update');
         Route::delete('/perencanaan/delete/{type}/{id}', 'deleteFile')->name('perencanaan.delete');
         Route::post('/perencanaan/upload/{type}', [PerencanaanController::class, 'uploadFile'])->name('perencanaan.upload');
-        Route::delete('/perencanaan/delete/{type}/{id}', [PerencanaanController::class, 'deleteFile'])->name('perencanaan.delete');
     });
 
     // === Pengukuran ===
@@ -178,9 +179,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('pengumuman/edit/{id}', [PengumumanController::class, 'edit'])->name('pengumuman.edit');
     Route::post('pengumuman/update/{id}', [PengumumanController::class, 'update'])->name('pengumuman.update');
     Route::get('/aturan', [AturanController::class, 'index'])->name('aturan');
-    Route::post('/aturan/create', [AturanController::class, 'create'])->name('aturan.create');
-    Route::get('/aturan/edit/{id}', [AturanController::class, 'edit'])->name('aturan.edit');
-    Route::post('/aturan/update/{id}', [AturanController::class, 'update'])->name('aturan.update');
+    Route::get('/aturan/create', [AturanController::class, 'create'])->name('aturan.create');
+    Route::post('/aturan', [AturanController::class, 'store'])->name('aturan.store');
+    Route::get('/aturan/{id}/edit', [AturanController::class, 'edit'])->name('aturan.edit');
+    Route::put('/aturan/{id}', [AturanController::class, 'update'])->name('aturan.update');
+    Route::delete('/aturan/{id}', [AturanController::class, 'destroy'])->name('aturan.destroy');
+    Route::get('/aturan/edit/{id}', [AturanController::class, 'edit']);
+    Route::post('/aturan/update/{id}', [AturanController::class, 'update']);
     Route::get('/sakipwil', [SakipwilController::class, 'index'])->name('sakipwil');
     Route::get('/file/view/{satker}/{filename}', [SakipwilController::class, 'viewFile'])
     ->name('file.view');
@@ -195,7 +200,7 @@ Route::middleware(['auth'])->group(function () {
     });
         
 
-        Route::get('/indikator-view', [IndikatorViewController::class, 'index'])->name('indikator.view');
+        Route::get('/indikator-view', fn () => redirect()->route('keloladata', ['tab' => 'sastra-saspro']))->name('indikator.view');
     // === Indikator 2025 (Dikomentari sesuai file asli) ===
     // Route::get('/indikator2025', [Indikator2025Controller::class, 'index'])->name('indikator2025.index');
     // Route::post('/pengukuran2025/store', [Indikator2025Controller::class, 'store'])->name('pengukuran2025.store');
