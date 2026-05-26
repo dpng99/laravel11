@@ -266,6 +266,7 @@ public function getSubIndikator2($rumpun, Request $request)
     $satkers = collect();
     $indikatorIds = [];
 
+    // Data ini berisi 'kode_indikator' dari tabel indikator_sastra
     if (request()->has('indikator_ids')) {
         $indikatorIds = explode(',', request('indikator_ids'));
     }
@@ -276,6 +277,7 @@ public function getSubIndikator2($rumpun, Request $request)
             ->whereIn('id_sakip_level', [1,2,3,4])
             ->pluck('id_satker');
     } elseif ($id_satker === 'menpanrb' || $id_satker === 'Pengawasan' || $id_satker === 'Panev') {
+        // Data ini juga merupakan 'kode_indikator' dari tabel indikator_sastra
         $indikatorIds = [100,101,102,103,104,105,107,109];
     } elseif ($level === 0 && $id) {
         $satkers = DB::table('sinori_login')
@@ -286,9 +288,27 @@ public function getSubIndikator2($rumpun, Request $request)
         $satkers = collect([$id_satker]);
     }
 
-    // Ambil saspro terkait indikator
+    // -------------------------------------------------------------------------
+    // PERBAIKAN 1: Cocokkan $indikatorIds dengan kolom `kode_indikator`
+    // untuk mendapatkan 'id' (Primary Key) yang asli
+    // -------------------------------------------------------------------------
+    $resolvedIds = [];
+    if (!empty($indikatorIds)) {
+        $resolvedIds = DB::table('indikator_sastra')
+            ->whereIn('kode_indikator', $indikatorIds) // <-- MENGGUNAKAN kode_indikator
+            ->pluck('kode_indikator') // <-- pluck dengan key=id untuk mapping
+            ->toArray();
+    }
+
+    // Ambil saspro terkait indikator menggunakan 'id' yang sudah diterjemahkan
     $sasproIds = Indikator::where('tahun', 'LIKE', "%$tahun%")
-        ->when(!empty($indikatorIds), fn($q) => $q->whereIn('id', $indikatorIds))
+        ->when(!empty($indikatorIds), function($q) use ($resolvedIds) {
+            if (empty($resolvedIds)) {
+                $q->whereRaw('1 = 0'); 
+            } else {
+                $q->whereIn('kode_indikator', $resolvedIds);
+            }
+        })
         ->distinct()
         ->pluck('id_saspro');
 
@@ -317,7 +337,16 @@ public function getSubIndikator2($rumpun, Request $request)
         $countAllCapaian = 0;
 
         foreach ($indikators as $indikator) {
-            if ($level == 0 && !in_array($indikator->id, $indikatorIds)) continue;
+            
+            // -------------------------------------------------------------------------
+            // PERBAIKAN 2: Ambil nilai `kode_indikator` untuk mencocokkan pengukuran
+            // -------------------------------------------------------------------------
+            $kode_indikator = DB::table('indikator_sastra')
+                ->where('id', $indikator->id) 
+                ->value('kode_indikator') ?? $indikator->id;
+
+            // Validasi melewati loop menggunakan nilai kode_indikator
+            if ($level == 0 && !in_array($kode_indikator, $indikatorIds)) continue;
 
             $target = is_numeric($indikator->target) ? (float)$indikator->target : 0;
 
@@ -334,7 +363,7 @@ public function getSubIndikator2($rumpun, Request $request)
                 if (str_contains($indikator->indikator_penghitungan, ',')) {
                     $rows = DB::table('pengukuran')
                         ->when($level != 0, fn($q) => $q->whereIn('id_satker', $satkers))
-                        ->where('indikator_id', $indikator->id)
+                        ->where('indikator_id', $kode_indikator) // <-- MENGGUNAKAN kode_indikator
                         ->where('tahun', $tahun)
                         ->whereIn('bulan', $bulanTW)
                         ->get(['perhitungan']);
@@ -357,24 +386,23 @@ public function getSubIndikator2($rumpun, Request $request)
                 } else { 
                     // Tunggal → ambil bulan terakhir yang ada datanya
                     $rows = DB::table('pengukuran')
-    ->when($level != 0, fn($q) => $q->whereIn('id_satker', $satkers))
-    ->where('indikator_id', $indikator->id)
-    ->where('tahun', $tahun)
-    ->whereIn('bulan', $bulanTW)
-    ->whereNotNull('capaian')
-    ->get(['capaian']);
+                        ->when($level != 0, fn($q) => $q->whereIn('id_satker', $satkers))
+                        ->where('indikator_id', $kode_indikator) // <-- MENGGUNAKAN kode_indikator
+                        ->where('tahun', $tahun)
+                        ->whereIn('bulan', $bulanTW)
+                        ->whereNotNull('capaian')
+                        ->get(['capaian']);
 
-$sum = 0;
-$count = 0;
-foreach ($rows as $row) {
-    $value = str_replace(',', '.', trim($row->capaian));
-    if ($value !== '' && is_numeric($value) && (float)$value != 0) {
-        $sum += (float)$value;
-        $count++;
-    }
-}
-$persentaseTW = $count > 0 ? round($sum / $count, 2) : null;
-
+                    $sum = 0;
+                    $count = 0;
+                    foreach ($rows as $row) {
+                        $value = str_replace(',', '.', trim($row->capaian));
+                        if ($value !== '' && is_numeric($value) && (float)$value != 0) {
+                            $sum += (float)$value;
+                            $count++;
+                        }
+                    }
+                    $persentaseTW = $count > 0 ? round($sum / $count, 2) : null;
                 }
 
                 // Simpan data per triwulan
@@ -404,16 +432,17 @@ $persentaseTW = $count > 0 ? round($sum / $count, 2) : null;
             'rata_capaian' => $rataCapaian,
             'indikators' => $indikatorData
         ];
+        
         $chartData = [];
-foreach ($dataSaspro as $saspro) {
-    foreach ($saspro['indikators'] as $indikator) {
-        $chartData['labels'][] = $indikator['nama'];
-        $chartData['datasets']['TW1'][] = $indikator['capaian_tw1'] ?? 0;
-        $chartData['datasets']['TW2'][] = $indikator['capaian_tw2'] ?? 0;
-        $chartData['datasets']['TW3'][] = $indikator['capaian_tw3'] ?? 0;
-        $chartData['datasets']['TW4'][] = $indikator['capaian_tw4'] ?? 0;
-    }
-}
+        foreach ($dataSaspro as $saspro) {
+            foreach ($saspro['indikators'] as $indikator) {
+                $chartData['labels'][] = $indikator['nama'];
+                $chartData['datasets']['TW1'][] = $indikator['capaian_tw1'] ?? 0;
+                $chartData['datasets']['TW2'][] = $indikator['capaian_tw2'] ?? 0;
+                $chartData['datasets']['TW3'][] = $indikator['capaian_tw3'] ?? 0;
+                $chartData['datasets']['TW4'][] = $indikator['capaian_tw4'] ?? 0;
+            }
+        }
     } // end saspro loop
 
     return response()->json($dataSaspro);
