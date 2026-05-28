@@ -152,7 +152,7 @@ class EvaluasiControllerNew extends Controller
 
                         if ($buktiLke && !empty($buktiLke->link_bukti_dukung)) {
                             $status = 'Ada';
-                            $fileLink = url("/file/view/{$idSatker}/" . urlencode($buktiLke->link_bukti_dukung));
+                            $fileLink = url("/file/view/{$idSatker}/" . rawurlencode($buktiLke->link_bukti_dukung));
                         } else {
                             if (isset($modelMapping[$kode])) {
                                 // eksekusi kalo beloman ada di sistem atau db
@@ -212,7 +212,7 @@ class EvaluasiControllerNew extends Controller
     }
 
     // ==========================================
-    // 💾 UPLOAD BUKTI DUKUNG (Google Drive)
+    //UPLOAD BUKTI DUKUNG (Google Drive)
     // ==========================================
     public function upload(Request $request)
     {

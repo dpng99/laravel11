@@ -120,7 +120,7 @@ export default function AppSidebar({ user, currentYear }) {
                 
                 {/* === Menu Bantuan === */}
                 {[99, 1, 2, 3, 4].includes(levelSakip) || String(idSatker).startsWith('Pengawasan') || String(idSatker).startsWith('menpanrb') || String(idSatker).startsWith('Panev') ? (
-                    <>  <NavLink href="/indikator-view" icon={<CloudUploadIcon />} text="Indikator Sastra & Saspro" active={url.startsWith('/indikator-view')} />
+                    <>  <NavLink href="/keloladata?tab=sastra-saspro" icon={<CloudUploadIcon />} text="Indikator Sastra & Saspro" active={url.startsWith('/keloladata') && url.includes('tab=sastra-saspro')} />
                         <NavLink href="/aturan" icon={<GavelIcon />} text="Sumber Aturan" active={url.startsWith('/aturan')} />
                         <NavLink href="/faq" icon={<QuizIcon />} text="FAQ" active={url.startsWith('/faq')} />
                         {levelSakip === 99 && (

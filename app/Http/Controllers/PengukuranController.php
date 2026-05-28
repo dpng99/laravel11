@@ -236,6 +236,14 @@ class PengukuranController extends Controller
         return view('pengukuran.form_pengukuran', compact('indikator'));
     }
 
+    public function getIndikatorByBidang($id_bidang)
+    {
+        $bidang = Bidang::find($id_bidang);
+        $rumpun = $bidang?->rumpun ?? $id_bidang;
+
+        return $this->getSubindikator($rumpun);
+    }
+
     public function getPengukuran($indikatorId)
     {
         $idSatker = auth()->user()->id_satker;
@@ -270,6 +278,51 @@ class PengukuranController extends Controller
             ->get();
 
         return response()->json($indikators);
+    }
+
+    public function getDataByBidangAndSubIndikator($id_bidang, $sub_indikator)
+    {
+        $bidang = Bidang::find($id_bidang);
+        $rumpun = $bidang?->rumpun ?? $id_bidang;
+        $indikatorIds = Indikator::where('link', $rumpun)->pluck('id');
+
+        $data = Pengukuran::whereIn('indikator_id', $indikatorIds)
+            ->where('id_satker', session('id_satker'))
+            ->where('tahun', session('tahun_terpilih', date('Y')))
+            ->where('sub_indikator', $sub_indikator)
+            ->orderBy('bulan')
+            ->get();
+
+        return response()->json($data);
+    }
+
+    public function updateInline(Request $request)
+    {
+        $validated = $request->validate([
+            'indikator_id' => 'required|integer',
+            'sub_indikator' => 'required|string',
+            'bulan' => 'required|integer|min:1|max:12',
+            'field' => 'required|string|in:perhitungan,capaian,sisa_tahun_lalu,faktor,langkah_optimalisasi',
+            'value' => 'nullable',
+        ]);
+
+        $pengukuran = Pengukuran::firstOrNew([
+            'indikator_id' => $validated['indikator_id'],
+            'id_satker' => session('id_satker'),
+            'tahun' => session('tahun_terpilih', date('Y')),
+            'sub_indikator' => $validated['sub_indikator'],
+            'bulan' => $validated['bulan'],
+        ]);
+
+        $pengukuran->{$validated['field']} = $validated['value'];
+        $pengukuran->save();
+
+        return response()->json(['success' => true]);
+    }
+
+    public function updateBulanan(Request $request)
+    {
+        return $this->updateInline($request);
     }
     
 }

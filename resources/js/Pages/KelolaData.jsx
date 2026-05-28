@@ -7,6 +7,7 @@ import { Container, Card, CardHeader, CardContent, Tabs, Tab, Box, Alert, Paper 
 import BidangTab from '@/Components/KelolaData/BidangTab';
 import SasproTab from '@/Components/KelolaData/SasproTab';
 import IndikatorTab from '@/Components/KelolaData/IndikatorTab';
+import SastraSasproTab from '@/Components/KelolaData/SastraSasproTab';
 
 function TabPanel(props) {
     const { children, value, index, ...other } = props;
@@ -17,12 +18,25 @@ function TabPanel(props) {
     );
 }
 
-export default function KelolaData({ bidangs, saspros, indikators, bidangall, sasproAll }) {
+const tabIndexes = {
+    bidang: 0,
+    saspro: 1,
+    indikator: 2,
+    'sastra-saspro': 3,
+};
+
+export default function KelolaData({ bidangs, saspros, indikators, bidangall, sasproAll, dataSastra, dataSaspro, filters = {} }) {
     // Gunakan default object {} agar tidak error jika flash undefined
     const { flash = {} } = usePage().props;
     
     // State Tab Aktif
-    const [activeTab, setActiveTab] = useState(0);
+    const [activeTab, setActiveTab] = useState(tabIndexes[filters.tab] ?? 0);
+
+    useEffect(() => {
+        if (filters.tab && tabIndexes[filters.tab] !== undefined) {
+            setActiveTab(tabIndexes[filters.tab]);
+        }
+    }, [filters.tab]);
 
     // Auto-hide Flash Message
     const [showFlash, setShowFlash] = useState(true);
@@ -68,6 +82,7 @@ export default function KelolaData({ bidangs, saspros, indikators, bidangall, sa
                                 <Tab label="Data Bidang" />
                                 <Tab label="Data Saspro" />
                                 <Tab label="Data Indikator" />
+                                <Tab label="Indikator Sastra & Saspro" />
                             </Tabs>
                         </Paper>
 
@@ -92,6 +107,14 @@ export default function KelolaData({ bidangs, saspros, indikators, bidangall, sa
                                 indikators={indikators}
                                 bidangAll={bidangall || []}
                                 sasproAll={sasproAll || []} 
+                            />
+                        </TabPanel>
+
+                        <TabPanel value={activeTab} index={3}>
+                            <SastraSasproTab
+                                dataSastra={dataSastra}
+                                dataSaspro={dataSaspro}
+                                filters={filters}
                             />
                         </TabPanel>
 
