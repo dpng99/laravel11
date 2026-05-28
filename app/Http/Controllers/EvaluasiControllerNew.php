@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage; // Wajib: Google Drive
+use Illuminate\Support\Facades\Storage; // as Google Drive
 use Illuminate\Support\Facades\Schema;
 
 // Pastikan semua Model di-import seperti aslinya
@@ -155,7 +155,7 @@ class EvaluasiControllerNew extends Controller
                             $fileLink = url("/file/view/{$idSatker}/" . urlencode($buktiLke->link_bukti_dukung));
                         } else {
                             if (isset($modelMapping[$kode])) {
-                                // Eksekusi Query Sistem HANYA JIKA belum ada di cache memori
+                                // eksekusi kalo beloman ada di sistem atau db
                                 if (!array_key_exists($kode, $sysAvailabilityCache)) {
                                     $sysAvailabilityCache[$kode] = $this->checkSystemAvailability($kode, $idSatker, $tahun, $modelMapping, $triwulanMapping);
                                 }
