@@ -14,11 +14,15 @@ class indikator_sastra_new extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'kode_indikator',
         'kode_sastra',      // Foreign Key ke sakip_sastra_new// Primary Key
         'nama_indikator',        
-        'deskripsi',
+        'deskripsi_indikator_sastra',
         'link',
-        'lingkup'
+        'lingkup',
+        'tahun',
+        'hide',
+        'urutan',
     ];
     public $timestamps = false;
     /**
@@ -27,6 +31,6 @@ class indikator_sastra_new extends Model
      */
     public function sastra()
     {
-        return $this->belongsTo(sastra_new::class, 'id_sastra', 'kode_sastra');
+        return $this->belongsTo(sastra_new::class, 'kode_sastra', 'id_sastra');
     }
 }

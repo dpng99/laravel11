@@ -14,15 +14,21 @@ class saspro_new extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id_saspro',
         'id_sastra',
         'nama_saspro',
         'deskripsi',
+        'link',
+        'lingkup',
+        'tahun',
+        'hide',
+        'urutan',
     ];
     public $timestamps = false;
     // Relasi ke Induk (Sastra)
     public function sastra()
     {
-        return $this->belongsTo(sastra_new::class, 'id_sastra', 'kode_sastra');
+        return $this->belongsTo(sastra_new::class, 'id_sastra', 'id_sastra');
     }
 
     // Relasi ke Anak (Sasaran Kegiatan)
@@ -34,6 +40,6 @@ class saspro_new extends Model
     // Relasi ke Indikator
     public function indikator()
     {
-        return $this->hasMany(saspro_indikator_new::class, 'id_saspro', 'kode_saspro');
+        return $this->hasMany(saspro_indikator_new::class, 'kode_saspro', 'id_saspro');
     }
 }

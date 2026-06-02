@@ -78,7 +78,11 @@ export default function BidangTab({ bidangs }) {
 
     // Pagination
     const handlePageChange = (event, value) => {
-        router.get(bidangs.path, { page: value }, { preserveScroll: true, preserveState: true, only: ['bidangs'] });
+        router.get(
+            route('keloladata'),
+            { tab: 'bidang', bidang_page: value, per_page: bidangs.per_page },
+            { preserveScroll: true, preserveState: true, only: ['bidangs', 'filters'] }
+        );
     };
 
     const lokasiLabel = (value) => lokasiOptions.find(option => option.value === value?.toString())?.label || value;

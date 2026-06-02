@@ -1,79 +1,188 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { router } from '@inertiajs/react';
+import { DataGrid } from '@mui/x-data-grid';
 import {
     Box,
     Button,
-    Chip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    FormControl,
+    Grid,
+    IconButton,
     InputAdornment,
-    Pagination,
+    InputLabel,
+    MenuItem,
     Paper,
+    Select,
     Stack,
     Tab,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
     Tabs,
     TextField,
-    Typography,
+    Tooltip,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import SearchIcon from '@mui/icons-material/Search';
+import SaveIcon from '@mui/icons-material/Save';
 
-const lingkupOptions = {
-    0: 'Semua Satker',
-    1: 'Pusat',
-    2: 'Kejati',
-    3: 'Kejari',
-    4: 'Cabjari',
-    5: 'Kejati, Kejari',
-    6: 'Kejari, Cabjari',
-    7: 'Kejati, Kejari, Cabjari',
-};
+export default function SastraSasproTab({ tabs = [], filters = {}, perPageOptions = [10, 25, 50], canManage = false }) {
+    const firstTab = tabs[0]?.key || '';
+    const [activeTab, setActiveTab] = useState(firstTab);
+    const [search, setSearch] = useState(filters.pohon_search || filters.search || '');
+    const [dialog, setDialog] = useState({ open: false, mode: 'create', tab: null, id: null });
+    const [form, setForm] = useState({});
 
-export default function SastraSasproTab({ dataSastra, dataSaspro, filters = {} }) {
-    const [tab, setTab] = useState('sastra');
-    const [search, setSearch] = useState(filters.search || '');
+    const tabMap = useMemo(() => Object.fromEntries(tabs.map((tab) => [tab.key, tab])), [tabs]);
+    const selectedTab = tabMap[activeTab] || tabs[0];
 
-    const sastraRows = dataSastra?.data || [];
-    const sasproRows = dataSaspro?.data || [];
+    const makeEmptyForm = (tab) => Object.fromEntries((tab?.fields || []).map((field) => [field.name, field.default ?? '']));
 
     const submitSearch = (extra = {}) => {
         router.get(
             route('keloladata'),
-            { tab: 'sastra-saspro', search, ...extra },
+            { tab: 'sastra-saspro', pohon_search: search, ...extra },
             { preserveState: true, preserveScroll: true, replace: true }
         );
     };
 
-    const handleSearchKey = (event) => {
-        if (event.key === 'Enter') {
-            submitSearch();
+    const openCreate = (tab) => {
+        setForm(makeEmptyForm(tab));
+        setDialog({ open: true, mode: 'create', tab, id: null });
+    };
+
+    const openEdit = (tab, row) => {
+        setForm({ ...makeEmptyForm(tab), ...row });
+        setDialog({ open: true, mode: 'edit', tab, id: row[tab.idKey] });
+    };
+
+    const submitForm = (event) => {
+        event.preventDefault();
+
+        const tab = dialog.tab;
+        const routeName = dialog.mode === 'edit' ? tab.routes.update : tab.routes.store;
+        const routeArgs = dialog.mode === 'edit' ? [dialog.id] : [];
+
+        router.post(route(routeName, ...routeArgs), form, {
+            preserveScroll: true,
+            onSuccess: () => setDialog((value) => ({ ...value, open: false })),
+        });
+    };
+
+    const deleteRow = (tab, id) => {
+        if (!confirm('Yakin ingin menghapus data ini?')) {
+            return;
         }
+
+        router.delete(route(tab.routes.destroy, id), { preserveScroll: true });
     };
 
-    const handlePageChange = (pageKey, page) => {
-        submitSearch({ [pageKey]: page });
-    };
+    const columnsFor = (tab) => {
+        const columns = [...(tab.columns || [])];
 
-    const lingkupLabel = (value) => {
-        if (value === null || value === undefined || value === '') {
-            return '-';
+        if (canManage) {
+            columns.push({
+                field: 'aksi',
+                headerName: 'Aksi',
+                width: 96,
+                sortable: false,
+                filterable: false,
+                renderCell: (params) => (
+                    <Stack direction="row" spacing={0.5}>
+                        <Tooltip title="Edit">
+                            <IconButton size="small" color="warning" onClick={() => openEdit(tab, params.row)}>
+                                <EditIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Hapus">
+                            <IconButton size="small" color="error" onClick={() => deleteRow(tab, params.id)}>
+                                <DeleteIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                ),
+            });
         }
 
-        return lingkupOptions[value] || value;
+        return columns;
     };
+
+    const changeGridPage = (tab, model) => {
+        submitSearch({
+            [tab.pageKey]: model.page + 1,
+            per_page: model.pageSize,
+        });
+    };
+
+    const renderField = (field) => {
+        const commonProps = {
+            fullWidth: true,
+            margin: 'normal',
+            label: field.label,
+            required: Boolean(field.required),
+            disabled: dialog.mode === 'edit' && Boolean(field.disabledOnEdit),
+        };
+
+        if (field.type === 'select') {
+            return (
+                <Grid item xs={12} md={field.md || 6} key={field.name}>
+                    <FormControl {...commonProps}>
+                        <InputLabel>{field.label}</InputLabel>
+                        <Select
+                            value={form[field.name] ?? ''}
+                            label={field.label}
+                            onChange={(event) => setForm({ ...form, [field.name]: event.target.value })}
+                        >
+                            {(field.options || []).map((option) => (
+                                <MenuItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </Grid>
+            );
+        }
+
+        return (
+            <Grid item xs={12} md={field.md || 6} key={field.name}>
+                <TextField
+                    {...commonProps}
+                    value={form[field.name] ?? ''}
+                    type={field.type || 'text'}
+                    multiline={Boolean(field.multiline)}
+                    rows={field.multiline ? 3 : undefined}
+                    onChange={(event) => setForm({ ...form, [field.name]: event.target.value })}
+                />
+            </Grid>
+        );
+    };
+
+    if (!selectedTab) {
+        return null;
+    }
+
+    const paginator = selectedTab.rows || {};
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', mb: 2 }}>
+            <Paper variant="outlined" sx={{ mb: 2 }}>
+                <Tabs value={selectedTab.key} onChange={(event, value) => setActiveTab(value)} variant="scrollable" scrollButtons="auto">
+                    {tabs.map((tab) => (
+                        <Tab key={tab.key} label={tab.label} value={tab.key} />
+                    ))}
+                </Tabs>
+            </Paper>
+
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }} alignItems={{ xs: 'stretch', md: 'center' }}>
                 <TextField
                     size="small"
-                    placeholder="Cari kode, nama, link, lingkup..."
+                    placeholder="Cari kode atau nama"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    onKeyDown={handleSearchKey}
+                    onKeyDown={(event) => event.key === 'Enter' && submitSearch({ [selectedTab.pageKey]: 1 })}
                     InputProps={{
                         startAdornment: (
                             <InputAdornment position="start">
@@ -81,130 +190,54 @@ export default function SastraSasproTab({ dataSastra, dataSaspro, filters = {} }
                             </InputAdornment>
                         ),
                     }}
-                    sx={{ minWidth: { xs: '100%', md: 360 } }}
+                    sx={{ minWidth: { md: 360 } }}
                 />
-                <Button variant="contained" startIcon={<SearchIcon />} onClick={() => submitSearch()}>
+                <Button variant="contained" startIcon={<SearchIcon />} onClick={() => submitSearch({ [selectedTab.pageKey]: 1 })}>
                     Cari
                 </Button>
-            </Box>
+                {canManage && (
+                    <Button variant="outlined" startIcon={<AddIcon />} onClick={() => openCreate(selectedTab)}>
+                        {selectedTab.addLabel}
+                    </Button>
+                )}
+            </Stack>
 
-            <Paper variant="outlined" sx={{ mb: 2 }}>
-                <Tabs value={tab} onChange={(event, value) => setTab(value)} variant="scrollable" scrollButtons="auto">
-                    <Tab label="Indikator Sastra" value="sastra" />
-                    <Tab label="Indikator Saspro" value="saspro" />
-                </Tabs>
-            </Paper>
+            <DataGrid
+                autoHeight
+                disableRowSelectionOnClick
+                rows={paginator.data || []}
+                columns={columnsFor(selectedTab)}
+                getRowId={(row) => row[selectedTab.idKey]}
+                rowCount={paginator.total || 0}
+                paginationMode="server"
+                paginationModel={{
+                    page: Math.max((paginator.current_page || 1) - 1, 0),
+                    pageSize: paginator.per_page || 10,
+                }}
+                onPaginationModelChange={(model) => changeGridPage(selectedTab, model)}
+                pageSizeOptions={perPageOptions}
+                sx={{
+                    border: 0,
+                    '& .MuiDataGrid-columnHeaders': { backgroundColor: '#f5f5f5' },
+                }}
+            />
 
-            {tab === 'sastra' && (
-                <Box>
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                        Indikator Sastra
-                    </Typography>
-                    <TableContainer component={Paper} variant="outlined">
-                        <Table size="small">
-                            <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
-                                <TableRow>
-                                    <TableCell>Kode</TableCell>
-                                    <TableCell>Indikator</TableCell>
-                                    <TableCell>Sastra</TableCell>
-                                    <TableCell>Link/Rumpun</TableCell>
-                                    <TableCell>Lingkup</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {sastraRows.map((row) => (
-                                    <TableRow key={row.kode_indikator} hover>
-                                        <TableCell>{row.kode_indikator}</TableCell>
-                                        <TableCell>{row.nama_indikator}</TableCell>
-                                        <TableCell>
-                                            <Box>
-                                                <Chip label={row.id_sastra} size="small" color="primary" variant="outlined" sx={{ mr: 1, mb: 0.5 }} />
-                                                <Typography variant="caption" display="block">{row.nama_sastra}</Typography>
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell>{row.link ?? '-'}</TableCell>
-                                        <TableCell>{lingkupLabel(row.lingkup)}</TableCell>
-                                    </TableRow>
-                                ))}
-                                {sastraRows.length === 0 && (
-                                    <TableRow>
-                                        <TableCell colSpan={5} align="center">Tidak ada data ditemukan.</TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                    {dataSastra?.last_page > 1 && (
-                        <Stack sx={{ mt: 2, alignItems: 'center' }}>
-                            <Pagination
-                                count={dataSastra.last_page}
-                                page={dataSastra.current_page}
-                                onChange={(event, page) => handlePageChange('sastra_page', page)}
-                                color="primary"
-                            />
-                        </Stack>
-                    )}
+            <Dialog open={dialog.open} onClose={() => setDialog((value) => ({ ...value, open: false }))} maxWidth="md" fullWidth>
+                <Box component="form" onSubmit={submitForm}>
+                    <DialogTitle>{dialog.mode === 'edit' ? 'Edit' : 'Tambah'} {dialog.tab?.label}</DialogTitle>
+                    <DialogContent>
+                        <Grid container spacing={2}>
+                            {(dialog.tab?.fields || []).map(renderField)}
+                        </Grid>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setDialog((value) => ({ ...value, open: false }))}>Batal</Button>
+                        <Button type="submit" variant="contained" startIcon={<SaveIcon />}>
+                            Simpan
+                        </Button>
+                    </DialogActions>
                 </Box>
-            )}
-
-            {tab === 'saspro' && (
-                <Box>
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                        Indikator Saspro
-                    </Typography>
-                    <TableContainer component={Paper} variant="outlined">
-                        <Table size="small">
-                            <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
-                                <TableRow>
-                                    <TableCell>Kode</TableCell>
-                                    <TableCell>Sastra</TableCell>
-                                    <TableCell>Saspro</TableCell>
-                                    <TableCell>Indikator</TableCell>
-                                    <TableCell>Link/Rumpun</TableCell>
-                                    <TableCell>Lingkup</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {sasproRows.map((row) => (
-                                    <TableRow key={row.kode_indikator} hover>
-                                        <TableCell>{row.kode_indikator}</TableCell>
-                                        <TableCell>
-                                            <Box>
-                                                <Chip label={row.id_sastra} size="small" color="primary" variant="outlined" sx={{ mr: 1, mb: 0.5 }} />
-                                                <Typography variant="caption" display="block">{row.nama_sastra}</Typography>
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Box>
-                                                <Chip label={row.id_saspro} size="small" color="secondary" sx={{ mr: 1, mb: 0.5 }} />
-                                                <Typography variant="caption" display="block">{row.nama_saspro}</Typography>
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell>{row.nama_indikator}</TableCell>
-                                        <TableCell>{row.link ?? '-'}</TableCell>
-                                        <TableCell>{lingkupLabel(row.lingkup)}</TableCell>
-                                    </TableRow>
-                                ))}
-                                {sasproRows.length === 0 && (
-                                    <TableRow>
-                                        <TableCell colSpan={6} align="center">Tidak ada data ditemukan.</TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                    {dataSaspro?.last_page > 1 && (
-                        <Stack sx={{ mt: 2, alignItems: 'center' }}>
-                            <Pagination
-                                count={dataSaspro.last_page}
-                                page={dataSaspro.current_page}
-                                onChange={(event, page) => handlePageChange('saspro_indikator_page', page)}
-                                color="secondary"
-                            />
-                        </Stack>
-                    )}
-                </Box>
-            )}
+            </Dialog>
         </Box>
     );
 }

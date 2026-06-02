@@ -17,17 +17,25 @@ class sastra_new extends Model
         'id_sastra',
         'nama_sastra',
         'deskripsi',
+        'link',
+        'lingkup',
+        'target',
+        'tahun',
+        'hide',
+        'urutan',
     ];
+
+    public $timestamps = false;
 
     // Relasi ke Sasaran Program (1 Sastra punya banyak Saspro)
     public function saspro()
     {
-        return $this->hasMany(saspro_new::class, 'id_sastra', 'kode_sastra');
+        return $this->hasMany(saspro_new::class, 'id_sastra', 'id_sastra');
     }
 
     // Relasi ke Indikator (Optional, jika ingin bypass saspro/saskeg)
     public function indikator()
     {
-        return $this->hasMany(saspro_indikator_new::class, 'id_sastra', 'kode_sastra');
+        return $this->hasMany(indikator_sastra_new::class, 'kode_sastra', 'id_sastra');
     }
 }

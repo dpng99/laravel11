@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Storage;
 class SakipwilController extends Controller
 {
-   public function index()
+   public function index(Request $request)
     {
         // Cek apakah tahun sudah dipilih
         if (!session()->has('tahun_terpilih')) {
@@ -20,6 +20,8 @@ class SakipwilController extends Controller
         $id_satker = session('id_satker');
         $tahun = session('tahun_terpilih');
         $level = session('id_sakip_level');
+        $perPage = $this->perPage($request);
+        $search = trim((string) $request->input('search'));
 
         $bidangs = Bidang::where('bidang_lokasi', $level)
             ->where('bidang_level', '!=', null)
@@ -28,30 +30,43 @@ class SakipwilController extends Controller
 
         $id = DB::table('sinori_login')->where('id_satker', $id_satker)->first();
 
-        // 1. Ambil Data User/Satker (Hanya 1 Query)
-        $query = DB::table('sinori_login')->where('id_satker', 'not like', 'was%');
+        // 1. Ambil Data User/Satker
+        $baseSatkerQuery = DB::table('sinori_login')->where('id_satker', 'not like', 'was%');
         if (in_array($id_satker, [999999, 'admin', 'Pengawasan', 'Panev', 'menpanrb'])) {
-            $query->whereNotIn('id_satker', [888881, 888882, 'admin', 999999, 'Pengawasan', 'Panev', 'menpanrb'])
+            $baseSatkerQuery->whereNotIn('id_satker', [888881, 888882, 'admin', 999999, 'Pengawasan', 'Panev', 'menpanrb'])
                   ->where('id_satker', 'not like', '00budi')
-                  ->where('id_kejati', 'not like', '87')
-                  ->orderBy('id_kejati', 'asc')
-                  ->orderBy('id_kejari', 'asc');
+                  ->where('id_kejati', 'not like', '87');
         } else {
-            $query->where('id_kejati', $id->id_kejati);
+            $baseSatkerQuery->where('id_kejati', $id->id_kejati);
         }
-        $data = $query->get();
 
-        $satkernamaList = $data->pluck('satkernama')->map(fn($name) => str_replace('_', ' ', $name));
-        $satkerIds = $data->pluck('id_satker')->toArray();
+        if ($search !== '') {
+            $baseSatkerQuery->where(function ($query) use ($search) {
+                $query->where('satkernama', 'like', "%{$search}%")
+                    ->orWhere('id_satker', 'like', "%{$search}%");
+            });
+        }
+
+        $orderedSatkerQuery = fn () => (clone $baseSatkerQuery)
+            ->orderBy('id_kejati', 'asc')
+            ->orderBy('id_kejari', 'asc');
+
+        $allSatkerIds = $orderedSatkerQuery()->pluck('id_satker')->toArray();
+        $data = $orderedSatkerQuery()
+            ->paginate($perPage)
+            ->withQueryString();
+
+        $satkerIds = collect($data->items())->pluck('id_satker')->toArray();
+        $satkernamaList = collect($data->items())->pluck('satkernama')->map(fn($name) => str_replace('_', ' ', $name));
 
         $id_periode = ($tahun == "2024") ? "P1" : "P2";
 
         // ========================================================================
         // 🔥 HELPER CANGGIH: Mengambil data + Grouping + Pluck hanya dengan 1 Query
         // ========================================================================
-        $fetchDocs = function ($table, $periodCol, $periodVal, $orderBy = 'id_perubahan', $replaceTw = false) use ($satkerIds) {
+        $fetchDocs = function ($table, $periodCol, $periodVal, $orderBy = 'id_perubahan', $replaceTw = false) use ($satkerIds, $allSatkerIds) {
             $q = DB::table($table)
-                ->whereIn('id_satker', $satkerIds)
+                ->whereIn('id_satker', $allSatkerIds)
                 ->where($periodCol, $periodVal);
                 
             if ($replaceTw) {
@@ -62,11 +77,12 @@ class SakipwilController extends Controller
             $records = $q->orderBy(DB::raw("CAST($orderBy AS UNSIGNED)"), 'desc')->get();
             
             // Grouping untuk object full (Props detail)
-            $grouped = $records->groupBy('id_satker');
+            $recordsBySatker = $records->groupBy('id_satker');
+            $grouped = $records->whereIn('id_satker', $satkerIds)->groupBy('id_satker');
             
             // Mapping untuk list file cepat (Sorted List Props)
-            $sortedList = collect($satkerIds)->mapWithKeys(function ($satkerId) use ($grouped) {
-                return [$satkerId => isset($grouped[$satkerId]) ? $grouped[$satkerId]->first()->id_filename : null];
+            $sortedList = collect($allSatkerIds)->mapWithKeys(function ($satkerId) use ($recordsBySatker) {
+                return [$satkerId => isset($recordsBySatker[$satkerId]) ? $recordsBySatker[$satkerId]->first()->id_filename : null];
             });
 
             return [$grouped, $sortedList];
@@ -75,10 +91,10 @@ class SakipwilController extends Controller
         // 2. Eksekusi Pengambilan Data Dokumen menggunakan Helper
         // Keputusan (Unik tanpa id_perubahan)
         $kepRecords = DB::table('sinori_sakip_keputusan')
-            ->whereIn('id_satker', $satkerIds)
+            ->whereIn('id_satker', $allSatkerIds)
             ->where('id_tahun', $tahun)
             ->get()->groupBy('id_satker');
-        $sortedKepList = collect($satkerIds)->map(fn($id) => isset($kepRecords[$id]) ? $kepRecords[$id]->first()->id_filesurat : null);
+        $sortedKepList = collect($allSatkerIds)->map(fn($id) => isset($kepRecords[$id]) ? $kepRecords[$id]->first()->id_filesurat : null);
 
         // Dokumen Standar (1 Baris = 1 Tabel Query, Otomatis dapat list_grouped & list_sorted)
         [$renstra, $sortedRenstraList] = $fetchDocs('sinori_sakip_renstra', 'id_periode', $id_periode);
@@ -99,15 +115,15 @@ class SakipwilController extends Controller
         // 🔥 OPTIMASI LKJiP: Dari 4 Query menjadi HANYA 1 Query
         // ========================================================================
         $lkjipRecords = DB::table('sinori_sakip_lakip')
-            ->whereIn('id_satker', $satkerIds)
+            ->whereIn('id_satker', $allSatkerIds)
             ->where('id_periode', $tahun)
             ->orderByRaw('CAST(id_perubahan AS UNSIGNED) DESC')
             ->get()
             ->groupBy('id_triwulan'); // Kelompokkan berdasarkan TW dulu
 
-        $getLkjipTw = function($tw) use ($lkjipRecords, $satkerIds) {
+        $getLkjipTw = function($tw) use ($lkjipRecords, $allSatkerIds) {
             $twData = $lkjipRecords->get($tw, collect())->groupBy('id_satker'); // Baru kelompokkan satker
-            return collect($satkerIds)->mapWithKeys(function($id) use ($twData) {
+            return collect($allSatkerIds)->mapWithKeys(function($id) use ($twData) {
                 return [$id => isset($twData[$id]) ? $twData[$id]->first()->id_filename : null];
             });
         };
@@ -120,6 +136,11 @@ class SakipwilController extends Controller
         return Inertia::render('Sakipwil', [
             'data' => $data,
             'tahun' => $tahun,
+            'filters' => [
+                'search' => $search,
+                'per_page' => $perPage,
+            ],
+            'perPageOptions' => [10, 50],
             'satkernamaList' => $satkernamaList,
             'sortedKepList' => $sortedKepList,
             'sortedRenstraList' => $sortedRenstraList,
@@ -181,5 +202,12 @@ class SakipwilController extends Controller
         }
 
         abort(404, 'File tidak ditemukan di Google Drive.');
+    }
+
+    private function perPage(Request $request): int
+    {
+        $perPage = (int) $request->input('per_page', 10);
+
+        return in_array($perPage, [10, 50], true) ? $perPage : 10;
     }
 }

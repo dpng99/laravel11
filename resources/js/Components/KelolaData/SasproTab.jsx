@@ -63,7 +63,11 @@ export default function SasproTab({ saspros, bidangAll }) {
     };
 
     const handlePageChange = (event, value) => {
-        router.get(saspros.path, { page: value }, { preserveScroll: true, preserveState: true, only: ['saspros'] });
+        router.get(
+            route('keloladata'),
+            { tab: 'saspro', saspro_page: value, per_page: saspros.per_page },
+            { preserveScroll: true, preserveState: true, only: ['saspros', 'filters'] }
+        );
     };
 
     return (
@@ -157,6 +161,13 @@ export default function SasproTab({ saspros, bidangAll }) {
                         </FormControl>
                         <TextField fullWidth label="Nama Saspro" value={editData.saspro_nama} onChange={e => setEditData({...editData, saspro_nama: e.target.value})} margin="normal" />
                         <TextField fullWidth multiline rows={3} label="Penjelasan" value={editData.penjelasan_saspro} onChange={e => setEditData({...editData, penjelasan_saspro: e.target.value})} margin="normal" />
+                        <TextField fullWidth label="Target" value={editData.target || ''} onChange={e => setEditData({...editData, target: e.target.value})} margin="normal" />
+                        <FormControl fullWidth margin="normal">
+                            <InputLabel>Lingkup</InputLabel>
+                            <Select value={editData.lingkup || '0'} label="Lingkup" onChange={e => setEditData({...editData, lingkup: e.target.value})}>
+                                {[0,1,2,3,4,5,6,7].map(val => (<MenuItem key={val} value={val}>{getLingkupLabel(val)}</MenuItem>))}
+                            </Select>
+                        </FormControl>
                         <TextField fullWidth label="Tahun" value={editData.tahun} onChange={e => setEditData({...editData, tahun: e.target.value})} margin="normal" />
                          <FormControl fullWidth margin="normal">
                             <InputLabel>Status</InputLabel>

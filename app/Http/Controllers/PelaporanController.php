@@ -7,17 +7,29 @@ use Illuminate\Http\Request;
 use App\Models\Lkjip;
 use App\Models\RapatStaffEka;
 use App\Models\Indikator;
-use App\Models\TargetPK;
 use App\Models\Pengukuran;
 use App\Models\Bidang;
-use Carbon\Carbon;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 class PelaporanController extends Controller
 {
+    private function tahunTerpilih()
+    {
+        return session('tahun_terpilih', date('Y'));
+    }
+
+    private function normalizeTriwulan($triwulan)
+    {
+        $tw = (int) $triwulan;
+        if ($tw < 1 || $tw > 4) {
+            $tw = 1;
+        }
+
+        return $tw;
+    }
+
     public function index(Request $request)
     {
         // Cek Session Tahun
@@ -26,7 +38,7 @@ class PelaporanController extends Controller
         }
 
         $level = session('id_sakip_level');
-        $tahun = session('tahun_terpilih');
+        $tahun = $this->tahunTerpilih();
         $idSatker = session('id_satker');
         $id_bidang = $request->get('id_bidang');
         
@@ -55,35 +67,39 @@ class PelaporanController extends Controller
         $data = [];
 
         if ($id_bidang) {
-        $indikators = Indikator::where('id_bidang', $id_bidang)->get();
-        $indikatorIds = $indikators->pluck('id'); // Ambil array ID indikator
+            $bidang = Bidang::find($id_bidang);
+            $rumpun = $bidang?->rumpun ?? $id_bidang;
+            $indikators = Indikator::where('link', $rumpun)
+                ->where('tahun', 'LIKE', '%' . $tahun . '%')
+                ->get();
+            $indikatorIds = $indikators->pluck('id'); // Ambil array ID indikator
 
-        // 🔥 BEBAS N+1: Tarik semua Pengukuran HANYA DENGAN 1 QUERY
-        $allPengukuran = Pengukuran::whereIn('indikator_id', $indikatorIds)
-            ->where('id_satker', $idSatker)
-            ->where('tahun', $tahun)
-            ->get()
-            ->groupBy('indikator_id'); // Kelompokkan berdasarkan ID indikator
+            // 🔥 BEBAS N+1: Tarik semua Pengukuran HANYA DENGAN 1 QUERY
+            $allPengukuran = Pengukuran::whereIn('indikator_id', $indikatorIds)
+                ->where('id_satker', $idSatker)
+                ->where('tahun', $tahun)
+                ->get()
+                ->groupBy('indikator_id'); // Kelompokkan berdasarkan ID indikator
 
-        foreach ($indikators as $indikator) {
-            $subIndikators = explode(',', $indikator->sub_indikator);
-            
-            // Ambil data pengukuran hanya dari koleksi (Bukan dari DB lagi)
-            $pengukuranData = isset($allPengukuran[$indikator->id]) ? $allPengukuran[$indikator->id] : collect([]);
+            foreach ($indikators as $indikator) {
+                $subIndikators = explode(',', $indikator->sub_indikator);
+                
+                // Ambil data pengukuran hanya dari koleksi (Bukan dari DB lagi)
+                $pengukuranData = isset($allPengukuran[$indikator->id]) ? $allPengukuran[$indikator->id] : collect([]);
 
-            $data[$indikator->id] = [
-                'nama' => $indikator->indikator_nama,
-                'sub' => []
-            ];
+                $data[$indikator->id] = [
+                    'nama' => $indikator->indikator_nama,
+                    'sub' => []
+                ];
 
-            foreach ($subIndikators as $sub) {
-                $sub = trim($sub);
-                $data[$indikator->id]['sub'][$sub] = $pengukuranData
-                    ->where('sub_indikator', $sub)
-                    ->keyBy('bulan'); 
+                foreach ($subIndikators as $sub) {
+                    $sub = trim($sub);
+                    $data[$indikator->id]['sub'][$sub] = $pengukuranData
+                        ->where('sub_indikator', $sub)
+                        ->keyBy('bulan');
+                }
             }
         }
-    }
 
         return Inertia::render('Kelola/Pelaporan', [
             'tahun' => $tahun, 
@@ -99,15 +115,19 @@ class PelaporanController extends Controller
 
     public function getIndikatorByBidang($id_bidang)
     {
-        $indikator = Indikator::where('id_bidang', $id_bidang)
-            ->select('id', 'indikator_nama', 'sub_indikator')
+        $bidang = Bidang::find($id_bidang);
+        $rumpun = $bidang?->rumpun ?? $id_bidang;
+
+        $indikator = Indikator::where('link', $rumpun)
+            ->where('tahun', 'LIKE', '%' . $this->tahunTerpilih() . '%')
+            ->select('id', 'indikator_nama', 'sub_indikator', 'indikator_penghitungan')
             ->get();
         return response()->json($indikator);
     }
 
     public function getSubIndikator($rumpun)
     {
-        $tahun = session('tahun_terpilih');
+        $tahun = $this->tahunTerpilih();
         $level = session('id_sakip_level');
 
         $indikators = Indikator::where('link', $rumpun)
@@ -135,8 +155,8 @@ class PelaporanController extends Controller
     public function getSubIndikator2($rumpun, Request $request)
     {
         $id_satker = session('id_satker');
-        $tw = $request->query('triwulan', 1);
-        $tahun = session('tahun_terpilih');
+        $tw = $this->normalizeTriwulan($request->query('triwulan', 1));
+        $tahun = $this->tahunTerpilih();
         $bulan_awal = ($tw - 1) * 3 + 1;
         $bulan_akhir = $bulan_awal + 2;
         $level = session('id_sakip_level');
@@ -156,6 +176,8 @@ class PelaporanController extends Controller
 
         foreach ($indikators as $indikator) {
             $persentase = 0; // Default 0 agar tidak error variable undefined
+            $totalDitangani = 0;
+            $totalDiselesaikan = 0;
 
             // Label Handling
             $rawLabels = strtolower($indikator->indikator_penghitungan ?? '');
@@ -190,6 +212,8 @@ class PelaporanController extends Controller
                             [$a, $b] = explode(';', $row->perhitungan);
                             $penyebut += (float) $a;
                             $pembilang += (float) $b;
+                            $totalDitangani += (float) $a;
+                            $totalDiselesaikan += (float) $b;
                         }
                     }
                     if ($penyebut > 0) {
@@ -228,11 +252,14 @@ class PelaporanController extends Controller
                 'indikator_id' => $indikator->id,
                 'indikator_nama' => $indikator->indikator_nama,
                 'indikator_penghitungan' => implode(', ', $labels),
+                'total_ditangani' => $totalDitangani,
+                'total_diselesaikan' => $totalDiselesaikan,
                 'persentase' => $persentase,
                 'target_pk' => $target_pk,
                 'capaian_pk' => $capaian_pk,
                 'faktor' => $first->faktor ?? '',
                 'langkah_optimalisasi' => $first->langkah_optimalisasi ?? '',
+                'langkah' => $first->langkah_optimalisasi ?? '',
             ];
         }
 
@@ -243,12 +270,13 @@ class PelaporanController extends Controller
     {
         $request->validate([
             'data'     => 'required|array',
-            'triwulan' => 'required'
+            'triwulan' => 'required|integer|min:1|max:4'
         ]);
 
         $id_satker = session('id_satker');
-        $tahun = session('tahun_terpilih');
-        $bulan_akhir = ($request->triwulan - 1) * 3 + 3;
+        $tahun = $this->tahunTerpilih();
+        $triwulan = $this->normalizeTriwulan($request->triwulan);
+        $bulan_akhir = ($triwulan - 1) * 3 + 3;
 
         DB::beginTransaction();
         try {
@@ -282,7 +310,7 @@ class PelaporanController extends Controller
         'id_triwulan' => 'required|in:TW 1,TW 2,TW 3,TW 4',
     ]);
 
-    $tahun = session('tahun_terpilih');
+    $tahun = $this->tahunTerpilih();
     $idSatker = session('id_satker');
     $id_triwulan = $request->input('id_triwulan');
 
@@ -357,7 +385,7 @@ class PelaporanController extends Controller
    public function uploadRapatStaffEka(Request $request)
 {
     // 1. Ambil Session & Validasi
-    $tahun = session('tahun_terpilih');
+    $tahun = $this->tahunTerpilih();
     $idSatker = session('id_satker');
 
     // Cek Session Safety (Opsional tapi disarankan)
@@ -437,7 +465,7 @@ class PelaporanController extends Controller
    public function updateFile(Request $request, $type, $id)
 {
     $id_satker = session('id_satker');
-    $tahun = session('tahun_terpilih');
+    $tahun = $this->tahunTerpilih();
 
     // 1. Validasi
     $validator = Validator::make($request->all(), [
@@ -595,5 +623,17 @@ class PelaporanController extends Controller
                      ->with('active_tab', $type);
     }
 }
+
+    // Backward-compatible endpoint for legacy route `/delete/lkjip/{id}`.
+    public function deleteLkjip($id)
+    {
+        return $this->deleteFile('lkjip', $id);
+    }
+
+    // Optional alias when route menggunakan `/delete/rapat-staff-eka/{id}`.
+    public function deleteRapatStaffEka($id)
+    {
+        return $this->deleteFile('rapat-staff-eka', $id);
+    }
 
 }

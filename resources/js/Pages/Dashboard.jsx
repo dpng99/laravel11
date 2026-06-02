@@ -1,10 +1,31 @@
 // resources/js/Pages/Dashboard.jsx
 import React, { useEffect, useState } from 'react';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout'; // Layout MUI Anda
 
 // Import Komponen Material-UI
-import { Card, CardContent, CardHeader, Typography, Grid, Button, Box, Paper } from '@mui/material';
+import {
+    Accordion,
+    AccordionDetails,
+    AccordionSummary,
+    Box,
+    Button,
+    Card,
+    CardContent,
+    CardHeader,
+    Chip,
+    Divider,
+    FormControl,
+    Grid,
+    InputLabel,
+    MenuItem,
+    Pagination,
+    Paper,
+    Select,
+    Stack,
+    Typography,
+} from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 // Helper komponen untuk Kartu Status Kepatuhan
 function StatusCard({ title, isFilled, textFilled, textNotFilled }) {
@@ -53,8 +74,132 @@ function AnimatedCard({ children, index = 0 }) {
     );
 }
 
+function IndikatorList({ title, rows }) {
+    if (!rows || rows.length === 0) {
+        return null;
+    }
+
+    return (
+        <Box sx={{ mt: 1.5 }}>
+            <Typography variant="subtitle2" fontWeight="bold" color="text.secondary" gutterBottom>
+                {title}
+            </Typography>
+            <Stack spacing={1}>
+                {rows.map((item) => (
+                    <Box key={item.id} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                        <Chip label={item.id} size="small" variant="outlined" color="primary" />
+                        <Typography variant="body2">{item.nama}</Typography>
+                    </Box>
+                ))}
+            </Stack>
+        </Box>
+    );
+}
+
+function PohonKinerjaSection({ pohonKinerja, perPageOptions }) {
+    const rows = pohonKinerja?.data || [];
+
+    const changePage = (page) => {
+        router.get(route('dashboard'), {
+            pohon_page: page,
+            per_page: pohonKinerja?.per_page || 10,
+        }, { preserveScroll: true, preserveState: true, replace: true });
+    };
+
+    const changePerPage = (event) => {
+        router.get(route('dashboard'), {
+            pohon_page: 1,
+            per_page: event.target.value,
+        }, { preserveScroll: true, preserveState: true, replace: true });
+    };
+
+    return (
+        <AnimatedCard index={1}>
+            <CardHeader
+                title="Pohon Kinerja"
+                titleTypographyProps={{ variant: 'h5', align: 'center', fontWeight: 'bold' }}
+                sx={{ backgroundColor: 'primary.main', color: 'white' }}
+            />
+            <CardContent>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} sx={{ mb: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                        Tersusun otomatis dari sasaran strategis, indikator sasaran strategis, sasaran program, dan indikator sasaran program.
+                    </Typography>
+                    <FormControl size="small" sx={{ width: { xs: '100%', md: 150 } }}>
+                        <InputLabel>Per Halaman</InputLabel>
+                        <Select value={pohonKinerja?.per_page || 10} label="Per Halaman" onChange={changePerPage}>
+                            {perPageOptions.map((value) => (
+                                <MenuItem key={value} value={value}>{value}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </Stack>
+
+                {rows.length > 0 ? (
+                    <Stack spacing={1.5}>
+                        {rows.map((sastra) => (
+                            <Accordion key={sastra.id} variant="outlined" disableGutters>
+                                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <Chip label={`Sastra ${sastra.id}`} size="small" color="primary" />
+                                            {sastra.target && <Chip label={`Target Institusi: ${sastra.target}`} size="small" variant="outlined" />}
+                                        </Box>
+                                        <Typography fontWeight="bold">{sastra.nama}</Typography>
+                                    </Box>
+                                </AccordionSummary>
+                                <AccordionDetails>
+                                    <IndikatorList title="Indikator Sasaran Strategis" rows={sastra.indikator} />
+
+                                    {sastra.saspro?.length > 0 && (
+                                        <Box sx={{ mt: 2 }}>
+                                            <Typography variant="subtitle2" fontWeight="bold" color="text.secondary" gutterBottom>
+                                                Sasaran Program
+                                            </Typography>
+                                            <Stack spacing={1.25}>
+                                                {sastra.saspro.map((saspro) => (
+                                                    <Paper key={saspro.id} variant="outlined" sx={{ p: 1.5 }}>
+                                                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 0.75 }}>
+                                                            <Chip label={`Saspro ${saspro.id}`} size="small" color="secondary" />
+                                                            {saspro.tahun && <Chip label={saspro.tahun} size="small" variant="outlined" />}
+                                                        </Box>
+                                                        <Typography variant="body2" fontWeight="bold">{saspro.nama}</Typography>
+                                                        <IndikatorList title="Indikator Sasaran Program" rows={saspro.indikator} />
+                                                    </Paper>
+                                                ))}
+                                            </Stack>
+                                        </Box>
+                                    )}
+                                </AccordionDetails>
+                            </Accordion>
+                        ))}
+                    </Stack>
+                ) : (
+                    <Typography align="center" color="text.secondary">
+                        Data pohon kinerja belum tersedia.
+                    </Typography>
+                )}
+
+                {pohonKinerja?.last_page > 1 && (
+                    <>
+                        <Divider sx={{ my: 2 }} />
+                        <Stack alignItems="center">
+                            <Pagination
+                                count={pohonKinerja.last_page}
+                                page={pohonKinerja.current_page}
+                                onChange={(event, page) => changePage(page)}
+                                color="primary"
+                            />
+                        </Stack>
+                    </>
+                )}
+            </CardContent>
+        </AnimatedCard>
+    );
+}
+
 export default function Dashboard(props) {
-    const { auth, pengumuman, renstraTerisi, ikuTerisi, renjaTerisi, rkaklTerisi, dipaTerisi, rencanaAksiTerisi } = props;
+    const { auth, pengumuman, pohonKinerja, pohonPerPageOptions = [10, 25, 50], renstraTerisi, ikuTerisi, renjaTerisi, rkaklTerisi, dipaTerisi, rencanaAksiTerisi } = props;
     const levelSakip = parseInt(auth.user?.id_sakip_level || 0, 10);
 
     return (
@@ -90,6 +235,10 @@ export default function Dashboard(props) {
                             )}
                         </CardContent>
                     </AnimatedCard>
+                </Grid>
+
+                <Grid item xs={12}>
+                    <PohonKinerjaSection pohonKinerja={pohonKinerja} perPageOptions={pohonPerPageOptions} />
                 </Grid>
 
                 {/* 2. Kepatuhan (Conditional) */}

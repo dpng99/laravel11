@@ -1,1 +1,0 @@
-import{j as n}from"./app-oT91ZbEW.js";function r({children:e}){const t={backgroundImage:'url("/gambar/background.jpg")',backgroundSize:"cover",backgroundPosition:"center",backgroundRepeat:"no-repeat",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",backgroundColor:"#f8f9fa"};return n.jsx("div",{style:t,children:e})}export{r as G};

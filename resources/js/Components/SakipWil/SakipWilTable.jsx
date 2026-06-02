@@ -1,62 +1,142 @@
-// resources/js/Components/SakipWil/SakipWilTable.jsx
 import React, { useState } from 'react';
-import { 
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, 
-    Paper, TextField, InputAdornment, Box, IconButton, Tooltip, Button 
+import { router } from '@inertiajs/react';
+import { DataGrid } from '@mui/x-data-grid';
+import {
+    Box,
+    Button,
+    IconButton,
+    InputAdornment,
+    Link,
+    Paper,
+    TextField,
+    Tooltip,
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'; // Centang
-import CancelIcon from '@mui/icons-material/Cancel'; // Silang
+import CancelIcon from '@mui/icons-material/Cancel';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DownloadIcon from '@mui/icons-material/Download';
-import * as XLSX from 'xlsx'; // Import xlsx
+import SearchIcon from '@mui/icons-material/Search';
+import * as XLSX from 'xlsx';
 
-// Helper untuk link file
-const FileLink = ({ fileData, satkerId, fileName }) => {
-    if (fileData) {
-        // Asumsi struktur data: { id_satker: '...', id_filename: '...' }
-        // Jika data hanya nama file (dari sorted list), gunakan itu
-        const link = typeof fileData === 'string' ? fileData : fileData.id_filename;
-        if (!link) return <CancelIcon color="error" fontSize="small" />;
-        
-        return (
-           // 🔽 PERUBAHAN DI SINI: Arahkan ke route /file/view 🔽
-            <a href={`/file/view/${satkerId}/${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer">
-                <CheckCircleIcon color="success" />
-            </a>
-        );
+const fileFields = [
+    ['renstra', 'Renstra', 'sortedRenstraList'],
+    ['iku', 'IKU', 'sortedIkuList'],
+    ['renja', 'Renja', 'sortedRenjaList'],
+    ['rkakl', 'RKAKL', 'sortedRkaklList'],
+    ['dipa', 'DIPA', 'sortedDipaList'],
+    ['renaksi', 'Renaksi', 'sortedRenaksiList'],
+    ['pk', 'PK', 'sortedPkList'],
+    ['lkjipTW1', 'LKJIP TW1', 'sortedLkjipTW1'],
+    ['lkjipTW2', 'LKJIP TW2', 'sortedLkjipTW2'],
+    ['lkjipTW3', 'LKJIP TW3', 'sortedLkjipTW3'],
+    ['lkjipTW4', 'LKJIP TW4', 'sortedLkjipTW4'],
+    ['rastaff', 'Rapat Staff', 'sortedRastaffList'],
+    ['lhe', 'LHE AKIP', 'sortedLheList'],
+    ['tlLheAkip', 'TL LHE AKIP', 'sortedTlLheAkipList'],
+    ['monevRenaksi', 'Monev Renaksi', 'sortedMonevRenaksiList'],
+];
+
+const FileStatus = ({ filename, satkerId }) => {
+    if (!filename) {
+        return <CancelIcon color="error" fontSize="small" />;
     }
-    return <CancelIcon color="error" fontSize="small" />;
+
+    return (
+        <Tooltip title="Lihat dokumen">
+            <IconButton
+                component={Link}
+                href={`/file/view/${satkerId}/${encodeURIComponent(filename)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                size="small"
+                color="success"
+            >
+                <CheckCircleIcon fontSize="small" />
+            </IconButton>
+        </Tooltip>
+    );
 };
 
+export default function SakipWilTable({ data, filters = {}, perPageOptions = [10, 50], ...props }) {
+    const [search, setSearch] = useState(filters.search || '');
+    const rows = (data?.data || []).map((row, index) => ({
+        ...row,
+        no: (data.current_page - 1) * data.per_page + index + 1,
+    }));
 
-export default function SakipWilTable({ data, ...props }) {
-    const [filter, setFilter] = useState('');
-
-    const handleFilterChange = (event) => {
-        setFilter(event.target.value.toLowerCase());
+    const visit = (extra = {}) => {
+        router.get(
+            route('sakipwil'),
+            {
+                search,
+                per_page: data?.per_page || filters.per_page || 10,
+                page: data?.current_page || 1,
+                ...extra,
+            },
+            { preserveState: true, preserveScroll: true, replace: true }
+        );
     };
 
-    // Filter data berdasarkan input pencarian
-    const filteredData = data.filter(row => 
-        row.satkernama.toLowerCase().includes(filter)
-    );
+    const columns = [
+        {
+            field: 'no',
+            headerName: 'No',
+            width: 72,
+            sortable: false,
+        },
+        {
+            field: 'satkernama',
+            headerName: 'Nama Satker',
+            minWidth: 280,
+            flex: 1,
+            renderCell: (params) => (
+                <Box sx={{ fontWeight: params.row.id_kejari == 0 ? 'bold' : 'normal' }}>
+                    {(params.value || '').replace(/_/g, ' ')}
+                </Box>
+            ),
+        },
+        ...fileFields.map(([field, label, propName]) => ({
+            field,
+            headerName: label,
+            width: 118,
+            align: 'center',
+            headerAlign: 'center',
+            sortable: false,
+            renderCell: (params) => (
+                <FileStatus filename={props[propName]?.[params.row.id_satker]} satkerId={params.row.id_satker} />
+            ),
+        })),
+    ];
 
-    // Fungsi Export Excel
     const handleExportExcel = () => {
-        const table = document.getElementById('sakipWilTable'); // Beri ID pada tabel
-        const wb = XLSX.utils.table_to_book(table, { sheet: "Sheet1" });
-        XLSX.writeFile(wb, "data_sakip_wilayah.xlsx");
+        const exportRows = rows.map((row, index) => {
+            const item = {
+                No: row.no || index + 1,
+                'Nama Satker': (row.satkernama || '').replace(/_/g, ' '),
+            };
+
+            fileFields.forEach(([, label, propName]) => {
+                item[label] = props[propName]?.[row.id_satker] ? 'Ada' : 'Tidak Ada';
+            });
+
+            return item;
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(exportRows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'SAKIP Wilayah');
+        XLSX.writeFile(workbook, 'data_sakip_wilayah.xlsx');
     };
 
     return (
         <Paper sx={{ p: 2, overflow: 'hidden' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 2 }}>
                 <TextField
-                    label="Cari Nama Satker"
+                    label="Cari Nama/ID Satker"
                     variant="outlined"
                     size="small"
-                    value={filter}
-                    onChange={handleFilterChange}
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    onKeyDown={(event) => event.key === 'Enter' && visit({ page: 1 })}
                     InputProps={{
                         startAdornment: (
                             <InputAdornment position="start">
@@ -65,106 +145,37 @@ export default function SakipWilTable({ data, ...props }) {
                         ),
                     }}
                 />
-                <Tooltip title="Export ke Excel">
-                    <Button
-                        variant="contained"
-                        color="success"
-                        onClick={handleExportExcel}
-                        startIcon={<DownloadIcon />}
-                    >
-                        Export Excel
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button variant="contained" startIcon={<SearchIcon />} onClick={() => visit({ page: 1 })}>
+                        Cari
                     </Button>
-                </Tooltip>
+                    <Tooltip title="Export halaman ini ke Excel">
+                        <Button variant="contained" color="success" onClick={handleExportExcel} startIcon={<DownloadIcon />}>
+                            Export Excel
+                        </Button>
+                    </Tooltip>
+                </Box>
             </Box>
-            
-            <TableContainer sx={{ maxHeight: 800 }}>
-                <Table stickyHeader id="sakipWilTable"> {/* Beri ID untuk export */}
-                    <TableHead>
-                        <TableRow sx={{ '& th': { backgroundColor: 'primary.main', color: 'white' } }}>
-                            <TableCell>No</TableCell>
-                            <TableCell>Nama Satker</TableCell>
-                            <TableCell>Renstra</TableCell>
-                            <TableCell>IKU</TableCell>
-                            <TableCell>Renja</TableCell>
-                            <TableCell>RKAKL</TableCell>
-                            <TableCell>Dipa</TableCell>
-                            <TableCell>Renaksi</TableCell>
-                            <TableCell>PK</TableCell>
-                            <TableCell>LKJIP TW1</TableCell>
-                            <TableCell>LKJIP TW2</TableCell>
-                            <TableCell>LKJIP TW3</TableCell>
-                            <TableCell>LKJIP TW4</TableCell>
-                            <TableCell>Rapat Staff</TableCell>
-                            <TableCell>LHE AKIP</TableCell>
-                            <TableCell>TL LHE AKIP</TableCell>
-                            <TableCell>Monev Renaksi</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {filteredData.length > 0 ? (
-                            filteredData.map((row, index) => (
-                                <TableRow key={row.id_satker} hover>
-                                    <TableCell>{index + 1}</TableCell>
-                                    <TableCell align="left" sx={{ fontWeight: row.id_kejari == 0 ? 'bold' : 'normal' }}>
-                                        {row.satkernama.replace(/_/g, ' ')}
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.renstra[row.id_satker]?.[0]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.iku[row.id_satker]?.[0]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.renja[row.id_satker]?.[0]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.rkakl[row.id_satker]?.[0]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.dipa[row.id_satker]?.[0]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.renaksi[row.id_satker]?.[0]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.pk[row.id_satker]?.[0]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.sortedLkjipTW1[row.id_satker]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.sortedLkjipTW2[row.id_satker]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.sortedLkjipTW3[row.id_satker]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.sortedLkjipTW4[row.id_satker]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.rastaff[row.id_satker]?.[0]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.lhe[row.id_satker]?.[0]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.tl_lhe_akip[row.id_satker]?.[0]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FileLink fileData={props.monev_renaksi[row.id_satker]?.[0]} satkerId={row.id_satker} />
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={17} align="center">
-                                    Tidak ada data yang tersedia atau cocok dengan pencarian.
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+
+            <DataGrid
+                autoHeight
+                disableRowSelectionOnClick
+                rows={rows}
+                columns={columns}
+                getRowId={(row) => row.id_satker}
+                rowCount={data?.total || 0}
+                paginationMode="server"
+                paginationModel={{
+                    page: Math.max((data?.current_page || 1) - 1, 0),
+                    pageSize: data?.per_page || 10,
+                }}
+                onPaginationModelChange={(model) => visit({ page: model.page + 1, per_page: model.pageSize })}
+                pageSizeOptions={perPageOptions}
+                sx={{
+                    border: 0,
+                    '& .MuiDataGrid-columnHeaders': { backgroundColor: 'primary.main', color: 'white' },
+                }}
+            />
         </Paper>
     );
 }

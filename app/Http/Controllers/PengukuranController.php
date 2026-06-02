@@ -11,9 +11,29 @@ use App\Models\Bidang;
 use Illuminate\Support\Facades\Auth;
 class PengukuranController extends Controller
 {
+    private function tahunTerpilih()
+    {
+        return session('tahun_terpilih', date('Y'));
+    }
+
+    private function applyLingkupFilter($query, $level)
+    {
+        if ($level == 1) {
+            $query->whereIn('lingkup', [0, 1]);
+        } elseif ($level == 2) {
+            $query->whereIn('lingkup', [0, 2, 5, 7]);
+        } elseif ($level == 3) {
+            $query->whereIn('lingkup', [0, 3, 5, 6, 7]);
+        } elseif ($level == 4) {
+            $query->whereIn('lingkup', [0, 4, 6]);
+        }
+
+        return $query;
+    }
+
     public function index(Request $request)
     {
-        $tahun = session('tahun_terpilih', date('Y'));
+        $tahun = $this->tahunTerpilih();
         $level = session('id_sakip_level');
         $satkernama = session('satkernama') ?? '';
         
@@ -87,101 +107,105 @@ class PengukuranController extends Controller
     //         return response()->json($data);
     //     }
 
-  public function store(Request $request)
-{
-    $subIndikatorList = $request->input('sub_indikator_list');
+    public function store(Request $request)
+    {
+        $subIndikatorList = $request->input('sub_indikator_list');
 
-    if (!is_array($subIndikatorList)) {
-        return redirect()->back()->withErrors('Tidak ada data yang dikirim.');
-    }
-
-    $id_satker = session('id_satker');
-    $tahun     = session('tahun_terpilih');
-
-    $bulanMap = [
-        'JANUARI' => 1, 'FEBRUARI' => 2, 'MARET' => 3, 'APRIL' => 4,
-        'MEI' => 5, 'JUNI' => 6, 'JULI' => 7, 'AGUSTUS' => 8,
-        'SEPTEMBER' => 9, 'OKTOBER' => 10, 'NOVEMBER' => 11, 'DESEMBER' => 12,
-    ];
-
-    $triwulanMap = [
-        'TW1' => [3],
-        'TW2' => [6],
-        'TW3' => [9],
-        'TW4' => [12],
-    ];
-
-    // helper lokal untuk normalisasi angka
-   $normalizeNumber = function ($val) {
-    if ($val === null || $val === '' || $val === '-') {
-        return null;
-    }
-    // hilangkan pemisah ribuan (titik), ubah koma jadi titik (desimal)
-    $val = str_replace('.', '', $val);
-    $val = str_replace(',', '.', $val);
-    return (float) $val;
-};
-
-    foreach ($subIndikatorList as $subIndikator) {
-        $indikatorId = $request->input("indikator_id.$subIndikator");
-        $indikator   = Indikator::find($indikatorId);
-
-        if (!$indikator) {
-            continue; // skip kalau tidak valid
+        if (!is_array($subIndikatorList)) {
+            return redirect()->back()->withErrors('Tidak ada data yang dikirim.');
         }
 
-        // === Simpan Sisa Tahun Lalu (kalau ada) ===
-        $sisaTahunLalu = $normalizeNumber($request->input("sisa_tahun_lalu.$subIndikator"));
+        $id_satker = session('id_satker');
+        $tahun = $this->tahunTerpilih();
 
-        $pengukuranSisa = Pengukuran::firstOrNew([
-            'indikator_id'  => $indikatorId,
-            'id_satker'     => $id_satker,
-            'tahun'         => $tahun,
-            'sub_indikator' => $subIndikator,
-            'bulan'         => 1, // Januari
-        ]);
-        $pengukuranSisa->sisa_tahun_lalu = $sisaTahunLalu;
-        $pengukuranSisa->save();
+        $bulanMap = [
+            'JANUARI' => 1, 'FEBRUARI' => 2, 'MARET' => 3, 'APRIL' => 4,
+            'MEI' => 5, 'JUNI' => 6, 'JULI' => 7, 'AGUSTUS' => 8,
+            'SEPTEMBER' => 9, 'OKTOBER' => 10, 'NOVEMBER' => 11, 'DESEMBER' => 12,
+        ];
 
-        // === Proses Bulanan ===
-        $labels = [];
-        if (!empty($indikator->indikator_penghitungan)) {
-            $labels = array_map('trim', explode(',', strtolower($indikator->indikator_penghitungan)));
-        }
-        if (empty($labels)) {
-            $labels = ['ditangani', 'diselesaikan'];
-        }
+        $triwulanMap = [
+            'TW1' => [3],
+            'TW2' => [6],
+            'TW3' => [9],
+            'TW4' => [12],
+        ];
 
-        foreach ($bulanMap as $bulanNama => $bulanAngka) {
-            $values = [];
-
-            foreach ($labels as $label) {
-                $val = $normalizeNumber($request->input("$label.$subIndikator.$bulanNama"));
-                $values[] = $val;
+        $normalizeNumber = function ($val) {
+            if ($val === null || $val === '' || $val === '-') {
+                return null;
             }
 
-            // gabungkan dengan ;
-            $capaian = implode(';', array_map(fn($v) => $v ?? '', $values));
+            $val = str_replace('.', '', $val);
+            $val = str_replace(',', '.', $val);
 
-            $pengukuran = Pengukuran::firstOrNew([
+            return (float) $val;
+        };
+
+        foreach ($subIndikatorList as $subIndikator) {
+            $indikatorId = $request->input("indikator_id.$subIndikator");
+            $indikator = Indikator::find($indikatorId);
+
+            if (!$indikator) {
+                continue;
+            }
+
+            $sisaTahunLalu = $normalizeNumber($request->input("sisa_tahun_lalu.$subIndikator"));
+
+            $pengukuranSisa = Pengukuran::firstOrNew([
                 'indikator_id'  => $indikatorId,
                 'id_satker'     => $id_satker,
                 'tahun'         => $tahun,
                 'sub_indikator' => $subIndikator,
-                'bulan'         => $bulanAngka,
+                'bulan'         => 1,
             ]);
-            $pengukuran->perhitungan = $capaian !== '' ? $capaian : null;
+            $pengukuranSisa->sisa_tahun_lalu = $sisaTahunLalu;
+            $pengukuranSisa->save();
 
-            if ($bulanAngka == 1) {
-                $pengukuran->sisa_tahun_lalu = $sisaTahunLalu;
+            $labels = [];
+            if (!empty($indikator->indikator_penghitungan)) {
+                $labels = array_map('trim', explode(',', strtolower($indikator->indikator_penghitungan)));
             }
-            $pengukuran->save();
-        }
+            if (empty($labels)) {
+                $labels = ['ditangani', 'diselesaikan'];
+            }
 
-        // === Proses Triwulan ===
-        foreach ($triwulanMap as $tw => $bulanList) {
-            foreach ($labels as $label) {
-                $nilai = $normalizeNumber($request->input("$label.$subIndikator.$tw"));
+            foreach ($bulanMap as $bulanNama => $bulanAngka) {
+                $values = [];
+                foreach ($labels as $label) {
+                    $values[] = $normalizeNumber($request->input("$label.$subIndikator.$bulanNama"));
+                }
+
+                $hasValue = collect($values)->contains(fn($value) => $value !== null);
+                $capaian = $hasValue
+                    ? implode(';', array_map(fn($v) => $v ?? '', $values))
+                    : null;
+
+                $pengukuran = Pengukuran::firstOrNew([
+                    'indikator_id'  => $indikatorId,
+                    'id_satker'     => $id_satker,
+                    'tahun'         => $tahun,
+                    'sub_indikator' => $subIndikator,
+                    'bulan'         => $bulanAngka,
+                ]);
+                $pengukuran->perhitungan = $capaian;
+
+                if ($bulanAngka == 1) {
+                    $pengukuran->sisa_tahun_lalu = $sisaTahunLalu;
+                }
+
+                $pengukuran->save();
+            }
+
+            foreach ($triwulanMap as $tw => $bulanList) {
+                $nilai = null;
+                foreach ($labels as $label) {
+                    $candidate = $normalizeNumber($request->input("$label.$subIndikator.$tw"));
+                    if ($candidate !== null) {
+                        $nilai = $candidate;
+                        break;
+                    }
+                }
 
                 foreach ($bulanList as $bulanAngka) {
                     $pengukuran = Pengukuran::firstOrNew([
@@ -191,15 +215,14 @@ class PengukuranController extends Controller
                         'sub_indikator' => $subIndikator,
                         'bulan'         => $bulanAngka,
                     ]);
-                    $pengukuran->capaian = $nilai; // jika $nilai null → akan overwrite ke null
+                    $pengukuran->capaian = $nilai;
                     $pengukuran->save();
                 }
             }
         }
-    }
 
-    return Redirect::back()->with('success', 'Data pengukuran berhasil disimpan atau diperbarui.');
-}
+        return Redirect::back()->with('success', 'Data pengukuran berhasil disimpan atau diperbarui.');
+    }
 
 
     // public function updateInline(Request $request)
@@ -244,12 +267,38 @@ class PengukuranController extends Controller
         return $this->getSubindikator($rumpun);
     }
 
+    public function getIndikatorNama(Request $request)
+    {
+        $bidangId = $request->input('bidang_id') ?? $request->route('id');
+
+        if (!$bidangId) {
+            return response()->json([]);
+        }
+
+        $bidang = Bidang::find($bidangId);
+        $rumpun = $bidang?->rumpun ?? $bidangId;
+        $tahun = $this->tahunTerpilih();
+        $level = session('id_sakip_level');
+
+        $indikators = Indikator::query()
+            ->where('link', $rumpun)
+            ->where('tahun', 'LIKE', "%$tahun%");
+
+        $this->applyLingkupFilter($indikators, $level);
+
+        return response()->json(
+            $indikators->select('id', 'indikator_nama', 'sub_indikator', 'indikator_penghitungan')->get()
+        );
+    }
+
     public function getPengukuran($indikatorId)
     {
-        $idSatker = auth()->user()->id_satker;
+        $idSatker = session('id_satker');
+        $tahun = $this->tahunTerpilih();
 
         $pengukuran = \App\Models\Pengukuran::where('indikator_id', $indikatorId)
             ->where('id_satker', $idSatker)
+            ->where('tahun', $tahun)
             ->get(['sub_indikator', 'bulan', 'perhitungan', 'sisa_tahun_lalu', 'capaian']);
 
         return response()->json($pengukuran);
@@ -257,25 +306,16 @@ class PengukuranController extends Controller
 
     public function getSubindikator($rumpun)
     {
-        $tahun = date('Y');
+        $tahun = $this->tahunTerpilih();
         $level = session('id_sakip_level');
 
-        $indikators = Indikator::where('link', $rumpun)
-            ->where(function ($query) use ($tahun) {
-                $query->where('tahun', 'LIKE', "%$tahun%");
-            })
-            ->where(function ($query) use ($level) {
-                if ($level == 1) {
-                    $query->whereIn('lingkup', [0, 1]);
-                } elseif ($level == 2) {
-                    $query->whereIn('lingkup', [0, 2, 5, 7]);
-                } elseif ($level == 3) {
-                    $query->whereIn('lingkup', [0, 3, 5, 6, 7]);
-                } elseif ($level == 4) {
-                    $query->whereIn('lingkup', [0, 4, 6]);
-                }
-            })
-            ->get();
+        $indikators = Indikator::query()
+            ->where('link', $rumpun)
+            ->where('tahun', 'LIKE', "%$tahun%");
+
+        $this->applyLingkupFilter($indikators, $level);
+
+        $indikators = $indikators->get();
 
         return response()->json($indikators);
     }
@@ -288,7 +328,7 @@ class PengukuranController extends Controller
 
         $data = Pengukuran::whereIn('indikator_id', $indikatorIds)
             ->where('id_satker', session('id_satker'))
-            ->where('tahun', session('tahun_terpilih', date('Y')))
+            ->where('tahun', $this->tahunTerpilih())
             ->where('sub_indikator', $sub_indikator)
             ->orderBy('bulan')
             ->get();
@@ -309,7 +349,7 @@ class PengukuranController extends Controller
         $pengukuran = Pengukuran::firstOrNew([
             'indikator_id' => $validated['indikator_id'],
             'id_satker' => session('id_satker'),
-            'tahun' => session('tahun_terpilih', date('Y')),
+            'tahun' => $this->tahunTerpilih(),
             'sub_indikator' => $validated['sub_indikator'],
             'bulan' => $validated['bulan'],
         ]);
@@ -326,3 +366,4 @@ class PengukuranController extends Controller
     }
     
 }
+

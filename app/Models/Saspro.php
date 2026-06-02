@@ -16,6 +16,7 @@ class Saspro extends Model
         'saspro_nama',
         'saspro_penjelasan',
         'lingkup',
+        'target',
         'tahun',
         'hide',
     ];

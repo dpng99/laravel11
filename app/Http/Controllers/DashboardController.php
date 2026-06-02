@@ -12,10 +12,11 @@ use App\Models\Renaksi;
 use App\Models\Kep;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         // Cek apakah tahun sudah dipilih
         // if (!session()->has('tahun_terpilih')) {
@@ -78,6 +79,8 @@ class DashboardController extends Controller
             'jumlahAturan' => $jumlahAturan,
             'data' => $data,
             'tahun' => $tahun,
+            'pohonKinerja' => $this->pohonKinerjaData($tahun, $request),
+            'pohonPerPageOptions' => [10, 25, 50],
             'renstraTerisi' => $renstraTerisi,
             'ikuTerisi' => $ikuTerisi,
             'renjaTerisi' => $renjaTerisi,
@@ -88,5 +91,150 @@ class DashboardController extends Controller
             'sortedKepList' => $sortedKepList,
 
         ]);
+    }
+
+    private function pohonKinerjaData(string $tahun, Request $request)
+    {
+        $sastras = $this->basePohonQuery('sakip_sastra_new', $tahun)
+            ->select($this->selectPohonColumns('sakip_sastra_new', [
+                'id_sastra',
+                'nama_sastra',
+                'deskripsi',
+            ]))
+            ->orderByRaw($this->orderExpression('sakip_sastra_new', 'id_sastra'))
+            ->paginate($this->perPage($request), ['*'], 'pohon_page')
+            ->withQueryString();
+
+        $indikatorSastras = $this->basePohonQuery('indikator_sastra', $tahun)
+            ->select($this->selectPohonColumns('indikator_sastra', [
+                'kode_indikator',
+                'kode_sastra',
+                'nama_indikator',
+                'deskripsi_indikator_sastra',
+            ]))
+            ->orderBy('kode_sastra')
+            ->orderByRaw($this->orderExpression('indikator_sastra', 'kode_indikator'))
+            ->get()
+            ->groupBy('kode_sastra');
+
+        $saspros = $this->basePohonQuery('sakip_saspro_new', $tahun)
+            ->select($this->selectPohonColumns('sakip_saspro_new', [
+                'id_saspro',
+                'id_sastra',
+                'nama_saspro',
+                'deskripsi',
+            ]))
+            ->orderBy('id_sastra')
+            ->orderByRaw($this->orderExpression('sakip_saspro_new', 'id_saspro'))
+            ->get()
+            ->groupBy('id_sastra');
+
+        $indikatorSaspros = $this->basePohonQuery('indikator_saspro', $tahun)
+            ->select($this->selectPohonColumns('indikator_saspro', [
+                'kode_indikator',
+                'kode_sastra',
+                'kode_saspro',
+                'nama_indikator',
+                'deskripsi_indikator_saspro',
+            ]))
+            ->orderBy('kode_sastra')
+            ->orderBy('kode_saspro')
+            ->orderByRaw($this->orderExpression('indikator_saspro', 'kode_indikator'))
+            ->get()
+            ->groupBy('kode_saspro');
+
+        $sastras->setCollection($sastras->getCollection()->map(function ($sastra) use ($indikatorSastras, $saspros, $indikatorSaspros) {
+            $sastraRows = $indikatorSastras->get($sastra->id_sastra, collect());
+            $sasproRows = $saspros->get($sastra->id_sastra, collect());
+
+            return [
+                'id' => (string) $sastra->id_sastra,
+                'nama' => (string) $sastra->nama_sastra,
+                'deskripsi' => $sastra->deskripsi,
+                'target' => $sastra->target ?? null,
+                'tahun' => $sastra->tahun ?? null,
+                'lingkup' => $sastra->lingkup ?? null,
+                'indikator' => $sastraRows->map(fn ($indikator) => [
+                    'id' => (string) $indikator->kode_indikator,
+                    'nama' => (string) $indikator->nama_indikator,
+                    'tahun' => $indikator->tahun ?? null,
+                    'lingkup' => $indikator->lingkup ?? null,
+                ])->values(),
+                'saspro' => $sasproRows->map(function ($saspro) use ($indikatorSaspros) {
+                    $indikatorRows = $indikatorSaspros->get($saspro->id_saspro, collect());
+
+                    return [
+                        'id' => (string) $saspro->id_saspro,
+                        'nama' => (string) $saspro->nama_saspro,
+                        'deskripsi' => $saspro->deskripsi,
+                        'tahun' => $saspro->tahun ?? null,
+                        'lingkup' => $saspro->lingkup ?? null,
+                        'indikator' => $indikatorRows->map(fn ($indikator) => [
+                            'id' => (string) $indikator->kode_indikator,
+                            'nama' => (string) $indikator->nama_indikator,
+                            'tahun' => $indikator->tahun ?? null,
+                            'lingkup' => $indikator->lingkup ?? null,
+                        ])->values(),
+                    ];
+                })->values(),
+            ];
+        })->values());
+
+        return $sastras;
+    }
+
+    private function basePohonQuery(string $table, ?string $tahun = null)
+    {
+        return DB::table($table)
+            ->when($tahun && Schema::hasColumn($table, 'tahun'), function ($query) use ($tahun) {
+                $query->where(function ($query) use ($tahun) {
+                    $query->whereNull('tahun')
+                        ->orWhere('tahun', '')
+                        ->orWhere('tahun', $tahun);
+                });
+            })
+            ->when(Schema::hasColumn($table, 'hide'), function ($query) {
+                $query->where(function ($query) {
+                    $query->whereNull('hide')
+                        ->orWhere('hide', '')
+                        ->orWhere('hide', '0')
+                        ->orWhere('hide', 0);
+                });
+            });
+    }
+
+    private function selectPohonColumns(string $table, array $baseColumns): array
+    {
+        $columns = $baseColumns;
+
+        $optionalColumns = ['link', 'lingkup', 'tahun', 'hide', 'urutan'];
+
+        if ($table === 'sakip_sastra_new') {
+            $optionalColumns[] = 'target';
+        }
+
+        foreach ($optionalColumns as $column) {
+            $columns[] = Schema::hasColumn($table, $column)
+                ? $column
+                : DB::raw("NULL as {$column}");
+        }
+
+        return $columns;
+    }
+
+    private function orderExpression(string $table, string $fallbackColumn): string
+    {
+        if (Schema::hasColumn($table, 'urutan')) {
+            return "COALESCE(urutan, 999999), {$fallbackColumn}";
+        }
+
+        return $fallbackColumn;
+    }
+
+    private function perPage(Request $request): int
+    {
+        $perPage = (int) $request->input('per_page', 10);
+
+        return in_array($perPage, [10, 25, 50], true) ? $perPage : 10;
     }
 }

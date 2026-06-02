@@ -103,6 +103,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/upload/lkjip', 'uploadLkjip')->name('upload.lkjip');
         Route::delete('/delete/lkjip/{id}', 'deleteLkjip')->name('delete.lkjip');
         Route::post('/upload/rapat-staff-eka', 'uploadRapatStaffEka')->name('upload.rapat_staff_eka');
+        Route::delete('/delete/rapat-staff-eka/{id}', 'deleteRapatStaffEka')->name('delete.rapat_staff_eka');
         Route::get('/get-subindikator/{rumpun}', 'getSubIndikator');
         Route::get('/pelaporan/subindikator/{rumpun}', 'getSubIndikator2');
         Route::post('/pelaporan/simpan-keterangan', 'simpanKeterangan')->name('pelaporan.simpan_keterangan');
@@ -144,7 +145,7 @@ Route::middleware(['auth'])->group(function () {
         // PERBAIKAN: Mengganti nama rute duplikat 'indikator.store'
         Route::post('/keloladata/indikator', 'indikator')->name('keloladata.indikator.store'); // Nama diubah
         Route::post('/keloladata/bidang', 'bidang')->name('bidang.store');
-        Route::post('/keloladata/saspro', 'saspro')->name('saspro.store');
+        Route::post('/keloladata/saspro', 'sasproStore')->name('saspro.store');
         Route::post('/keloladata/storeOrUpdateBidang', 'storeOrUpdateBidang')->name('bidang.storeOrUpdateBidang');
         Route::get('/keloladata/edit/{id}', 'edit')->name('bidang.edit');
         Route::delete('/keloladata/destroy/{id}', 'destroy')->name('bidang.destroy');
@@ -153,6 +154,19 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/indikator/store', 'storeIndikator')->name('indikator.store'); // Nama ini dipertahankan
         Route::post('/indikator/delete/{id}', 'deleteIndikator')->name('indikator.delete');
         Route::post('/indikator/update/{id}', 'updateIndikator')->name('indikator.update');
+
+        Route::post('/keloladata/pohon/sastra', 'pohonSastraStore')->name('pohon.sastra.store');
+        Route::post('/keloladata/pohon/sastra/{id}', 'pohonSastraUpdate')->name('pohon.sastra.update');
+        Route::delete('/keloladata/pohon/sastra/{id}', 'pohonSastraDestroy')->name('pohon.sastra.destroy');
+        Route::post('/keloladata/pohon/indikator-sastra', 'pohonIndikatorSastraStore')->name('pohon.indikator-sastra.store');
+        Route::post('/keloladata/pohon/indikator-sastra/{id}', 'pohonIndikatorSastraUpdate')->name('pohon.indikator-sastra.update');
+        Route::delete('/keloladata/pohon/indikator-sastra/{id}', 'pohonIndikatorSastraDestroy')->name('pohon.indikator-sastra.destroy');
+        Route::post('/keloladata/pohon/saspro', 'pohonSasproStore')->name('pohon.saspro.store');
+        Route::post('/keloladata/pohon/saspro/{id}', 'pohonSasproUpdate')->name('pohon.saspro.update');
+        Route::delete('/keloladata/pohon/saspro/{id}', 'pohonSasproDestroy')->name('pohon.saspro.destroy');
+        Route::post('/keloladata/pohon/indikator-saspro', 'pohonIndikatorSasproStore')->name('pohon.indikator-saspro.store');
+        Route::post('/keloladata/pohon/indikator-saspro/{id}', 'pohonIndikatorSasproUpdate')->name('pohon.indikator-saspro.update');
+        Route::delete('/keloladata/pohon/indikator-saspro/{id}', 'pohonIndikatorSasproDestroy')->name('pohon.indikator-saspro.destroy');
     });
     // Halaman Admin Download ZIP
     Route::get('/admin/download-dokumen', [DownloaderFile::class, 'index'])

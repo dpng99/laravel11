@@ -14,17 +14,25 @@ class saspro_indikator_new extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'kode_indikator',
         'kode_sastra',
         'kode_saspro',
         'nama_indikator',
-        'deskripsi',
+        'deskripsi_indikator_saspro',
+        'link',
+        'lingkup',
+        'tahun',
+        'hide',
+        'urutan',
     ];
+
+    public $timestamps = false;
 
     // Relasi ke Saskeg
     // Relasi ke Saspro
     public function saspro()
     {
-        return $this->belongsTo(saspro_new::class, 'id_saspro', 'kode_saspro');
+        return $this->belongsTo(saspro_new::class, 'kode_saspro', 'id_saspro');
     }
 
     // Relasi ke Penilaian (Anak)

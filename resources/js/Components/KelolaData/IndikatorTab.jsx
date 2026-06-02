@@ -71,7 +71,11 @@ export default function IndikatorTab({ indikators, bidangAll, sasproAll }) {
     };
 
     const handlePageChange = (event, value) => {
-        router.get(indikators.path, { page: value }, { preserveScroll: true, preserveState: true, only: ['indikators'] });
+        router.get(
+            route('keloladata'),
+            { tab: 'indikator', indikator_page: value, per_page: indikators.per_page },
+            { preserveScroll: true, preserveState: true, only: ['indikators', 'filters'] }
+        );
     };
 
     const getLingkupLabel = (val) => {

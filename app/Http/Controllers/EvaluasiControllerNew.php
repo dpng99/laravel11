@@ -382,7 +382,16 @@ class EvaluasiControllerNew extends Controller
     }
     public function uploadTlLheAkip(Request $request)
     {
-        $request->validate(['tl_lhe_akip_file' => 'required|mimes:pdf|max:10240']);
+        $request->validate([
+            'tl_lhe_akip_file' => 'nullable|mimes:pdf|max:10240',
+            'tllhe_file' => 'nullable|mimes:pdf|max:10240',
+        ]);
+
+        $uploadedFile = $request->file('tl_lhe_akip_file') ?? $request->file('tllhe_file');
+        if (!$uploadedFile) {
+            return back()->withErrors(['tl_lhe_akip_file' => 'File TL LHE AKIP wajib diunggah.']);
+        }
+
         $tahun = session('tahun_terpilih');
         $idSatker = session('id_satker');
 
@@ -391,7 +400,7 @@ class EvaluasiControllerNew extends Controller
 
         try {
             $filename = 'tl_lhe_akip_' . $tahun . '_' . $id_perubahan . '.pdf';
-            Storage::disk('google')->putFileAs("uploads/repository/{$idSatker}", $request->file('tl_lhe_akip_file'), $filename);
+            Storage::disk('google')->putFileAs("uploads/repository/{$idSatker}", $uploadedFile, $filename);
             
             TlLheAkip::create(['id_periode' => $tahun, 'id_satker' => $idSatker, 'id_perubahan' => $id_perubahan, 'id_filename' => $filename, 'id_tglupload' => now()->format('d/m/Y h:i A')]);
             return redirect()->route('evaluasi')->with(['success-tllhe' => 'Berhasil upload Google Drive', 'active_tab' => 'tl-lhe-akip']);

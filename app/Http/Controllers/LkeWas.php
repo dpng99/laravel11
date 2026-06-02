@@ -48,13 +48,15 @@ class LkeWas extends Controller
             18 => 'TW 1', 19 => 'TW 2', 37 => 'TW 1', 38 => 'TW 2', 39 => 'TW 1', 40 => 'TW 2',
         ];
     }
-    public function index()
+    public function index(Request $request)
     {  if(!session()->has('tahun_terpilih')) {
             return redirect()->route('pilih.tahun');
         }
         $tahun = session('tahun_terpilih');
         // $id_satker = preg_replace('/^was/i', '', session('id_satker'));
         $id_satker = session('id_satker');
+        $perPage = $this->perPage($request);
+        $search = trim((string) $request->input('search'));
         
         $id_kejati = DB::table('sinori_login')->where('id_satker', $id_satker)->first();
         $level = session('id_sakip_level');
@@ -63,31 +65,42 @@ class LkeWas extends Controller
             return back()->with('error', 'Data Kejati tidak ditemukan');
         }
 
-        $list_kejari = DB::table('sinori_login')
-            ->where('id_kejati', $id_kejati->id_kejati)
-            ->where('id_hidesatker', 0)
-            ->orderBy('satkernama')
-            ->get();
-            
         if (in_array($id_satker, [999999, 'admin', 'Pengawasan', 'Panev', 'menpanrb'])) {
             // Ambil semua satker, urutkan berdasarkan id_kejati
-            $list_kejari = DB::table('sinori_login')
+            $query = DB::table('sinori_login')
                 ->whereNotIn('id_satker', [888881, 888882, 'admin', 999999, 'Pengawasan', 'Panev', 'menpanrb']) // dikecualikan
                 ->where('id_satker', 'not like', 'was%')
                 ->where('id_satker', 'not like', '00budi')
-                ->where('id_kejati', 'not like', '87') // dikecualikan
-                ->orderBy('id_kejati', 'asc')
-                ->orderBy('id_kejari', 'asc')
-                ->get();
+                ->where('id_kejati', 'not like', '87'); // dikecualikan
         } else {
             // Ambil data satkernama dan id_satker sesuai id_kejati
-            $list_kejari = DB::table('sinori_login')
+            $query = DB::table('sinori_login')
                 ->where('id_kejati', $id_kejati->id_kejati)
-                ->where('id_satker', 'not like', 'was%') // dikecualikan
-                // ->orderBy('id_satker', 'asc')
-                ->get();
+                ->where('id_satker', 'not like', 'was%'); // dikecualikan
         }
-        return Inertia::render('Lkewas', compact('tahun', 'list_kejari'));
+
+        if ($search !== '') {
+            $query->where(function ($query) use ($search) {
+                $query->where('satkernama', 'like', "%{$search}%")
+                    ->orWhere('id_satker', 'like', "%{$search}%");
+            });
+        }
+
+        $list_kejari = $query
+            ->orderBy('id_kejati', 'asc')
+            ->orderBy('id_kejari', 'asc')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        return Inertia::render('Lkewas', [
+            'tahun' => $tahun,
+            'list_kejari' => $list_kejari,
+            'filters' => [
+                'search' => $search,
+                'per_page' => $perPage,
+            ],
+            'perPageOptions' => [10, 50],
+        ]);
     }
 
     public function listBuktiDukung(Request $request)
@@ -222,5 +235,12 @@ class LkeWas extends Controller
 
         // Return first data only
         return Schema::hasColumn($tableName, 'id_perubahan') ? $query->first() : $query->latest()->first();
+    }
+
+    private function perPage(Request $request): int
+    {
+        $perPage = (int) $request->input('per_page', 10);
+
+        return in_array($perPage, [10, 50], true) ? $perPage : 10;
     }
 }

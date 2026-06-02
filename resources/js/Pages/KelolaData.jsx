@@ -25,7 +25,17 @@ const tabIndexes = {
     'sastra-saspro': 3,
 };
 
-export default function KelolaData({ bidangs, saspros, indikators, bidangall, sasproAll, dataSastra, dataSaspro, filters = {} }) {
+export default function KelolaData({
+    bidangs,
+    saspros,
+    indikators,
+    bidangall,
+    sasproAll,
+    masterDataTabs,
+    perPageOptions,
+    canManagePohonKinerja,
+    filters = {},
+}) {
     // Gunakan default object {} agar tidak error jika flash undefined
     const { flash = {} } = usePage().props;
     
@@ -82,7 +92,7 @@ export default function KelolaData({ bidangs, saspros, indikators, bidangall, sa
                                 <Tab label="Data Bidang" />
                                 <Tab label="Data Saspro" />
                                 <Tab label="Data Indikator" />
-                                <Tab label="Indikator Sastra & Saspro" />
+                                <Tab label="Sastra, Saspro & Indikator" />
                             </Tabs>
                         </Paper>
 
@@ -112,8 +122,9 @@ export default function KelolaData({ bidangs, saspros, indikators, bidangall, sa
 
                         <TabPanel value={activeTab} index={3}>
                             <SastraSasproTab
-                                dataSastra={dataSastra}
-                                dataSaspro={dataSaspro}
+                                tabs={masterDataTabs}
+                                perPageOptions={perPageOptions}
+                                canManage={canManagePohonKinerja}
                                 filters={filters}
                             />
                         </TabPanel>
