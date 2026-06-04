@@ -19,16 +19,20 @@ import QuizIcon from '@mui/icons-material/Quiz';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { CloudDownload } from '@mui/icons-material';
 
 export default function AppSidebar({ user, currentYear }) {
     const { url } = usePage();
     const satkernama = user?.satkernama || 'Nama Satker';
-    const idSatker = String(user?.id_satker || 'ID Satker').padStart(6, '0'); // Format ID Satker jadi 6 digit dengan leading zeros
+    const rawIdSatker = String(user?.id_satker || '');
+    const idSatker = (rawIdSatker || 'ID Satker').padStart(6, '0'); // Format ID Satker jadi 6 digit dengan leading zeros
     const levelSakip = parseInt(user?.id_sakip_level || 0, 10);
     const tahunAplikasi = currentYear;
+    const adminSatkerIds = ['admin', '999999', 'menpanrb', 'Pengawasan', 'Panev'];
+    const isAdmin = levelSakip === 99 || adminSatkerIds.includes(rawIdSatker);
+    const canSeeAllSatkers = [99, 1, 0].includes(levelSakip) || adminSatkerIds.includes(rawIdSatker);
+    const canUseScopedSatkerPages = canSeeAllSatkers || [2, 3, 4].includes(levelSakip);
 
     // Cek submenu aktif
     const isSubmenuActive = [
@@ -91,22 +95,32 @@ export default function AppSidebar({ user, currentYear }) {
                 )}
 
                 {/* === Menu Utama Lainnya === */}
-                {[99, 0, 2].includes(levelSakip) && (
+                {canUseScopedSatkerPages && (
                     <NavLink href="/sakipwil" icon={<LanguageIcon />} text="SAKIP Wilayah" active={url.startsWith('/sakipwil')} />
                 )}
                 {/* ... (Tambahkan link lain dengan ikon MUI) ... */}
-                {[99, 0].includes(levelSakip) && (
-                    <NavLink href="/was-lke" icon={<VisibilityIcon />} text="Evaluasi" active={url.startsWith('/was-lke')} />
+                {canUseScopedSatkerPages && (
+                    <NavLink href="/was-lke" icon={<VisibilityIcon />} text="Evaluasi Wilayah" active={url.startsWith('/was-lke')} />
                 )}
 
                 {/* === Menu Admin (Level 99) === */}
-                {levelSakip === 99 && (
+                {isAdmin && (
                     <>
                         <NavLink href="/sakipvalidasi" icon={<SecurityIcon />} text="SAKIP Validasi" active={url.startsWith('/sakipvalidasi')} />
                         <NavLink href="/chatsupport" icon={<SupportAgentIcon />} text="Chat Support" active={url.startsWith('/chatsupport')} />
                         <NavLink href="/pengumuman" icon={<CampaignIcon />} text="Pengumuman" active={url.startsWith('/pengumuman')} />
                         <NavLink href="/keloladata" icon={<StorageIcon />} text="Kelola Data" active={url.startsWith('/keloladata')} />
+                    </>
+                )}
+
+                {canUseScopedSatkerPages && (
+                    <>
                         <NavLink href="/monitoring" icon={<BarChartIcon />} text="Monitoring" active={url.startsWith('/monitoring')} />
+                    </>
+                )}
+
+                {isAdmin && (
+                    <>
                         <NavLink 
                             href={route('admin.download.index')} 
                             icon={<CloudDownload />}
@@ -119,11 +133,11 @@ export default function AppSidebar({ user, currentYear }) {
                 )}
                 
                 {/* === Menu Bantuan === */}
-                {[99, 1, 2, 3, 4].includes(levelSakip) || String(idSatker).startsWith('Pengawasan') || String(idSatker).startsWith('menpanrb') || String(idSatker).startsWith('Panev') ? (
-                    <>  <NavLink href="/keloladata?tab=sastra-saspro" icon={<CloudUploadIcon />} text="Sastra, Saspro & Indikator" active={url.startsWith('/keloladata') && url.includes('tab=sastra-saspro')} />
+                {[99, 1, 2, 3, 4].includes(levelSakip) || rawIdSatker.startsWith('Pengawasan') || rawIdSatker.startsWith('menpanrb') || rawIdSatker.startsWith('Panev') ? (
+                    <>
                         <NavLink href="/aturan" icon={<GavelIcon />} text="Sumber Aturan" active={url.startsWith('/aturan')} />
                         <NavLink href="/faq" icon={<QuizIcon />} text="FAQ" active={url.startsWith('/faq')} />
-                        {levelSakip === 99 && (
+                        {isAdmin && (
                             <NavLink href="/ubahpassword" icon={<VpnKeyIcon />} text="Ubah Password" active={url.startsWith('/ubahpassword')} />
                         )}
                     </>

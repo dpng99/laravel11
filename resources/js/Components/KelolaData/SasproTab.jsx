@@ -10,12 +10,14 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 
-export default function SasproTab({ saspros, bidangAll }) {
+export default function SasproTab({ saspros, bidangAll, lingkupOptions = [] }) {
+    const defaultLingkup = lingkupOptions[0]?.value ?? '';
+
     const { data, setData, post, processing, reset } = useForm({
         link: '', 
         saspro_nama: '', 
         penjelasan_saspro: '', 
-        lingkup: '0', // Default 0 sesuai gambar
+        lingkup: defaultLingkup,
         target: '',   // Kolom target
         tahun: '', 
         hide: '0'
@@ -28,13 +30,8 @@ export default function SasproTab({ saspros, bidangAll }) {
         e.preventDefault();
         post(route('saspro.store'), { onSuccess: () => reset(), preserveScroll: true });
     };
-    const getLingkupLabel = (val) => {
-        const map = {
-            0: 'Semua Satker', 1: 'Pusat', 2: 'Kejati', 3: 'Kejari', 
-            4: 'Cabjari', 5: 'Kejati, Kejari', 6: 'Kejari, Cabjari', 7: 'Kejati, Kejari, Cabjari'
-        };
-        return map[val] || val;
-    };
+    const getLingkupLabel = (val) => lingkupOptions.find(option => String(option.value) === String(val))?.label || val;
+
     const handleEditClick = (item) => {
         setEditData({
             id: item.id,
@@ -42,7 +39,7 @@ export default function SasproTab({ saspros, bidangAll }) {
             saspro_nama: item.saspro_nama,
             penjelasan_saspro: item.saspro_penjelasan,
             tahun: item.tahun,
-            lingkup: item.lingkup,
+            lingkup: item.lingkup?.toString() ?? defaultLingkup,
             target: item.target,
             hide: item.hide
         });
@@ -95,7 +92,7 @@ export default function SasproTab({ saspros, bidangAll }) {
                         <FormControl fullWidth margin="normal">
                                                             <InputLabel>Lingkup</InputLabel>
                                                             <Select value={data.lingkup} label="Lingkup" onChange={e => setData('lingkup', e.target.value)}>
-                                                                {[0,1,2,3,4,5,6,7].map(val => (<MenuItem key={val} value={val}>{getLingkupLabel(val)}</MenuItem>))}
+                                                                {lingkupOptions.map(option => (<MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>))}
                                                             </Select>
                         </FormControl>
                         <TextField fullWidth label="Tahun" value={data.tahun} onChange={e => setData('tahun', e.target.value)} margin="normal" required />
@@ -164,8 +161,8 @@ export default function SasproTab({ saspros, bidangAll }) {
                         <TextField fullWidth label="Target" value={editData.target || ''} onChange={e => setEditData({...editData, target: e.target.value})} margin="normal" />
                         <FormControl fullWidth margin="normal">
                             <InputLabel>Lingkup</InputLabel>
-                            <Select value={editData.lingkup || '0'} label="Lingkup" onChange={e => setEditData({...editData, lingkup: e.target.value})}>
-                                {[0,1,2,3,4,5,6,7].map(val => (<MenuItem key={val} value={val}>{getLingkupLabel(val)}</MenuItem>))}
+                            <Select value={editData.lingkup || defaultLingkup} label="Lingkup" onChange={e => setEditData({...editData, lingkup: e.target.value})}>
+                                {lingkupOptions.map(option => (<MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>))}
                             </Select>
                         </FormControl>
                         <TextField fullWidth label="Tahun" value={editData.tahun} onChange={e => setEditData({...editData, tahun: e.target.value})} margin="normal" />

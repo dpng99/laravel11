@@ -17,6 +17,7 @@ use App\Models\Renaksi;
 use App\Models\Lkjip;
 use App\Models\lhe_2023;
 use App\Models\TlLheAkip;
+use App\Services\SatkerAccessService;
 use ZipArchive;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
@@ -25,10 +26,10 @@ class DownloaderFile extends Controller
 {
     public function index()
     {
-        // Cek apakah user adalah Admin (Level 1 atau 99, sesuaikan dengan logic role Anda)
-        // Contoh: Level 1 = Admin Pusat
-        if (Auth::user()->id_sakip_level != 1 && Auth::user()->id_sakip_level != 99) {
-            abort(403, 'Unauthorized action.');
+        app(SatkerAccessService::class)->abortUnlessAdmin();
+
+        if (! session()->has('tahun_terpilih')) {
+            return redirect()->route('pilih.tahun');
         }
 
         // Ambil daftar Kejati untuk dropdown
@@ -52,6 +53,13 @@ class DownloaderFile extends Controller
     }
     public function downloadKejati(Request $request, $id_kejati)
     {
+        app(SatkerAccessService::class)->abortUnlessAdmin();
+
+        $tahun = $request->input('tahun', session('tahun_terpilih'));
+        if (! $tahun) {
+            return response()->json(['message' => 'Tahun belum dipilih.'], 400);
+        }
+
         // 1. Validasi & Cari Daftar Satker berdasarkan ID Kejati
         // Asumsi: Table users memiliki kolom 'id_kejati' dan 'id_satker'
         $satkers = User::where('id_kejati', $id_kejati)->pluck('id_satker');
@@ -92,15 +100,8 @@ class DownloaderFile extends Controller
             // 4. Loop setiap jenis dokumen
             foreach ($dokumenMap as $folderName => $modelClass) {
                 
-                // Ambil data file milik satker-satker tersebut
-                // Filter tahun jika dikirim via request (opsional)
                 $query = $modelClass::whereIn('id_satker', $satkers);
-                if ($request->has('tahun')) {
-                    // Cek nama kolom tahun/periode
-                    $dummy = new $modelClass();
-                    $col = Schema::hasColumn($dummy->getTable(), 'tahun') ? 'tahun' : 'id_periode';
-                    $query->where($col, $request->tahun);
-                }
+                $this->applyTahunFilter($query, $modelClass, $tahun);
                 
                 $files = $query->get();
 
@@ -136,6 +137,23 @@ class DownloaderFile extends Controller
         
         } else {
             return response()->json(['message' => 'Gagal membuat file ZIP'], 500);
+        }
+    }
+
+    private function applyTahunFilter($query, string $modelClass, $tahun): void
+    {
+        $table = (new $modelClass())->getTable();
+
+        if (Schema::hasColumn($table, 'tahun')) {
+            $query->where('tahun', $tahun);
+        } elseif (Schema::hasColumn($table, 'id_tahun')) {
+            $query->where('id_tahun', $tahun);
+        } elseif (Schema::hasColumn($table, 'id_periode')) {
+            $periode = $table === 'sinori_sakip_renstra'
+                ? ((string) $tahun === '2024' ? 'P1' : 'P2')
+                : $tahun;
+
+            $query->where('id_periode', $periode);
         }
     }
 }

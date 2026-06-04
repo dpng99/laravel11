@@ -19,6 +19,7 @@ use App\Models\{
     sample_skp, sk_pk, sk_pm, tar_pm, TlLheAkip, tar_lkjip, ss_perencanaan, 
     ss_laporanweb, ss_laporanapp, nodis_datakinerja, RapatStaffEka
 };
+use App\Services\LkeBuktiDukungService;
 
 class EvaluasiControllerNew extends Controller
 {
@@ -112,6 +113,8 @@ class EvaluasiControllerNew extends Controller
         $tahun = session('tahun_terpilih');
         $idSatker = session('id_satker');
 
+        $lkeGrouped = app(LkeBuktiDukungService::class)->grouped((string) $idSatker, $tahun);
+/*
         $lkeHierarki = lke_komponen::with(['subKomponens.kriterias.buktiDukungs'])
                         ->orderBy('id', 'asc')->get();
 
@@ -192,6 +195,7 @@ class EvaluasiControllerNew extends Controller
         $lkeGrouped = $lkeDataFlat->groupBy('id_komponen')->map(fn($subItems) => $subItems->groupBy('id_sub_komponen'));
 
         // 🔥 OPTIMASI 3: Hanya select kolom yang dipakai agar irit RAM
+*/
         $lheAkipFiles = LheAkip::select('id', 'id_filename', 'id_periode', 'id_perubahan', 'id_tglupload')
             ->where('id_satker', $idSatker)->where('id_periode', $tahun)->orderByDesc('id')->get();
             
@@ -226,12 +230,14 @@ class EvaluasiControllerNew extends Controller
         $idSatker = session('id_satker');
         $tahun = session('tahun_terpilih');
         $kode = (int)$request->kode_bukti;
+        $resolver = app(LkeBuktiDukungService::class);
+        $evidencePeriod = $resolver->expectedPeriod($kode, $tahun);
 
         $dokRef = lke_buktidukung::find($kode);
         $cleanName = $dokRef ? preg_replace('/[^A-Za-z0-9]/', '_', $dokRef->dokumen) : 'Dokumen';
         $extension = $request->file('file')->getClientOriginalExtension();
         // Buat nama file berdasarkan pedoman
-        $filename = $this->generateCustomFileName($kode, $idSatker, $tahun, $extension);
+        $filename = $this->generateCustomFileName($kode, $idSatker, $evidencePeriod, $extension);
         $folderPath = "uploads/repository/{$idSatker}";
 
         try {
@@ -243,8 +249,8 @@ class EvaluasiControllerNew extends Controller
                 ['id_komponen' => $request->id_komponen, 'id_sub_komponen' => $request->id_sub_komponen, 'link_bukti_dukung' => $filename, 'tgl_pengisian' => now()->format('d/m/Y H:i A')]
             );
 
-            if (isset($this->getMapping()[$kode])) {
-                $this->saveToSourceTable($kode, $filename, $idSatker, $tahun);
+            if (isset($resolver->modelMapping()[$kode])) {
+                $this->saveToSourceTable($kode, $filename, $idSatker, $evidencePeriod);
             }
 
             return back()->with('success', 'File berhasil diupload ke Google Drive.');
@@ -262,14 +268,15 @@ class EvaluasiControllerNew extends Controller
         $idSatker = session('id_satker');
         $tahun = session('tahun_terpilih');
         $kode = (int)$request->kode_bukti;
-        $mapping = $this->getMapping();
+        $resolver = app(LkeBuktiDukungService::class);
+        $mapping = $resolver->modelMapping();
 
         if (!isset($mapping[$kode])) return $this->sendResponse($request, false, 'Model tidak ditemukan.');
 
-        $dokumenSumber = $this->checkSystemAvailability($kode, $idSatker, $tahun, $mapping, $this->getTriwulanMapping());
+        $dokumenSumber = $resolver->sourceDocument($kode, (string) $idSatker, $tahun);
 
         if ($dokumenSumber) {
-            $filename = $dokumenSumber->id_filename ?? $dokumenSumber->file ?? $dokumenSumber->nama_file ?? $dokumenSumber->link_bukti_dukung ?? null;
+            $filename = $resolver->filenameFromSource($dokumenSumber);
             if ($filename) {
                 DB::table('bukti_dukung')->updateOrInsert(
                     ['id_satker' => $idSatker, 'id_kriteria' => $request->id_kriteria, 'kode_bukti' => $kode],

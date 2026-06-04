@@ -61,6 +61,22 @@ export default function LkeModal({ open, onClose, data }) {
         });
     };
 
+    const sourceLabel = (bukti) => {
+        if (bukti.status === 'Ada') {
+            return bukti.is_manual ? 'Manual Upload' : 'Terverifikasi Sistem';
+        }
+
+        return bukti.status === 'Tersedia di Sistem (Belum Verif)' ? 'Tersedia di Sistem' : 'Belum Ada';
+    };
+
+    const sourceColor = (bukti) => {
+        if (bukti.status === 'Ada') {
+            return bukti.is_manual ? 'warning' : 'success';
+        }
+
+        return bukti.status === 'Tersedia di Sistem (Belum Verif)' ? 'info' : 'error';
+    };
+
     if (!data) return null;
 
     return (
@@ -88,12 +104,17 @@ export default function LkeModal({ open, onClose, data }) {
                                         {bukti.nama_dokumen}
                                     </Typography>
                                     <Chip 
-                                        label={bukti.is_manual ? "Manual Upload" : "Sistem Otomatis"} 
+                                        label={sourceLabel(bukti)}
                                         size="small" 
-                                        color={bukti.is_manual ? "warning" : "primary"} 
+                                        color={sourceColor(bukti)}
                                         variant="outlined"
                                         sx={{ mt: 0.5, fontSize: '0.65rem', height: 20 }}
                                     />
+                                    {bukti.periode && (
+                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                                            Periode {bukti.periode}
+                                        </Typography>
+                                    )}
                                 </TableCell>
                                 
                                 {/* Kolom Status */}

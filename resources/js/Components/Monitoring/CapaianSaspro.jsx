@@ -63,6 +63,11 @@ function SasproBarChart({ saspro }) {
 
 // Helper untuk format %
 const showVal = (v) => (v !== null && v !== undefined) ? `${v}%` : '-';
+const tabLabel = (sastra, index) => {
+    const match = String(sastra.id_saspro ?? '').match(/^SS(\d+)$/i);
+
+    return match ? `Sasaran Strategis ${match[1]}` : `Sasaran Strategis ${index + 1}`;
+};
 
 export default function CapaianSaspro() {
     const [data, setData] = useState([]);
@@ -71,6 +76,10 @@ export default function CapaianSaspro() {
     const [activeTab, setActiveTab] = useState(0); // Gunakan index 0 sebagai default
 
     useEffect(() => {
+        setLoading(true);
+        setError(null);
+        setActiveTab(0);
+
         axios.get('/monitoring/capaian-saspro-all') // URL dari Blade
             .then(response => {
                 setData(response.data);
@@ -97,7 +106,7 @@ export default function CapaianSaspro() {
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                 <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
                     {data.map((saspro, i) => (
-                        <Tab label={`Sasaran Strategis ${i + 1}`} key={saspro.id_saspro} id={`tab-${saspro.id_saspro}`} />
+                        <Tab label={tabLabel(saspro, i)} key={saspro.id_saspro} id={`tab-${saspro.id_saspro}`} />
                     ))}
                 </Tabs>
             </Box>
@@ -108,25 +117,31 @@ export default function CapaianSaspro() {
                     <Typography variant="h4" sx={{ mt: 3, fontWeight: 'bold' }}>{saspro.nama_saspro}</Typography>
                     
                     {/* Tabel */}
+                    {saspro.indikators.length === 0 ? (
+                        <Alert severity="warning" sx={{ my: 2 }}>Tidak ada indikator</Alert>
+                    ) : (
                     <TableContainer component={Paper} sx={{ my: 2 }}>
                         <Table size="small">
                             <TableHead sx={{ backgroundColor: '#f0bb49' }}>
                                 <TableRow>
                                     <TableCell rowSpan={2}>No</TableCell>
                                     <TableCell rowSpan={2}>Nama Indikator</TableCell>
-                                    <TableCell rowSpan={2}>Target</TableCell>
-                                    <TableCell colSpan={2}>Triwulan 1</TableCell>
-                                    <TableCell colSpan={2}>Triwulan 2</TableCell>
-                                    <TableCell colSpan={2}>Triwulan 3</TableCell>
-                                    <TableCell colSpan={2}>Triwulan 4</TableCell>
+                                    <TableCell colSpan={3}>Triwulan 1</TableCell>
+                                    <TableCell colSpan={3}>Triwulan 2</TableCell>
+                                    <TableCell colSpan={3}>Triwulan 3</TableCell>
+                                    <TableCell colSpan={3}>Triwulan 4</TableCell>
                                 </TableRow>
                                 <TableRow>
+                                    <TableCell>Target</TableCell>
                                     <TableCell>Capaian</TableCell>
                                     <TableCell>Capaian thd Target</TableCell>
+                                    <TableCell>Target</TableCell>
                                     <TableCell>Capaian</TableCell>
                                     <TableCell>Capaian thd Target</TableCell>
+                                    <TableCell>Target</TableCell>
                                     <TableCell>Capaian</TableCell>
                                     <TableCell>Capaian thd Target</TableCell>
+                                    <TableCell>Target</TableCell>
                                     <TableCell>Capaian</TableCell>
                                     <TableCell>Capaian thd Target</TableCell>
                                 </TableRow>
@@ -136,13 +151,16 @@ export default function CapaianSaspro() {
                                     <TableRow key={j}>
                                         <TableCell>{j + 1}</TableCell>
                                         <TableCell>{ind.nama}</TableCell>
-                                        <TableCell align="center">{ind.target_tw1 || 0}%</TableCell>
+                                        <TableCell align="center">{showVal(ind.target_tw1)}</TableCell>
                                         <TableCell align="center">{showVal(ind.capaian_tw1)}</TableCell>
                                         <TableCell align="center">{showVal(ind.capaian_terhadap_target_tw1)}</TableCell>
+                                        <TableCell align="center">{showVal(ind.target_tw2)}</TableCell>
                                         <TableCell align="center">{showVal(ind.capaian_tw2)}</TableCell>
                                         <TableCell align="center">{showVal(ind.capaian_terhadap_target_tw2)}</TableCell>
+                                        <TableCell align="center">{showVal(ind.target_tw3)}</TableCell>
                                         <TableCell align="center">{showVal(ind.capaian_tw3)}</TableCell>
                                         <TableCell align="center">{showVal(ind.capaian_terhadap_target_tw3)}</TableCell>
+                                        <TableCell align="center">{showVal(ind.target_tw4)}</TableCell>
                                         <TableCell align="center">{showVal(ind.capaian_tw4)}</TableCell>
                                         <TableCell align="center">{showVal(ind.capaian_terhadap_target_tw4)}</TableCell>
                                     </TableRow>
@@ -150,11 +168,14 @@ export default function CapaianSaspro() {
                             </TableBody>
                         </Table>
                     </TableContainer>
+                    )}
                     
                     {/* Chart */}
-                    <Box sx={{ mb: 4 }}>
-                        <SasproBarChart saspro={saspro} />
-                    </Box>
+                    {saspro.indikators.length > 0 && (
+                        <Box sx={{ mb: 4 }}>
+                            <SasproBarChart saspro={saspro} />
+                        </Box>
+                    )}
                 </TabPanel>
             ))}
         </Box>

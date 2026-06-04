@@ -32,6 +32,7 @@ export default function KelolaData({
     bidangall,
     sasproAll,
     masterDataTabs,
+    lingkupOptions = [],
     perPageOptions,
     canManagePohonKinerja,
     filters = {},
@@ -108,6 +109,7 @@ export default function KelolaData({
                             <SasproTab 
                                 saspros={saspros} 
                                 bidangAll={bidangall || []} 
+                                lingkupOptions={lingkupOptions}
                             />
                         </TabPanel>
 
@@ -117,6 +119,7 @@ export default function KelolaData({
                                 indikators={indikators}
                                 bidangAll={bidangall || []}
                                 sasproAll={sasproAll || []} 
+                                lingkupOptions={lingkupOptions}
                             />
                         </TabPanel>
 

@@ -10,9 +10,11 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 
-export default function IndikatorTab({ indikators, bidangAll, sasproAll }) {
+export default function IndikatorTab({ indikators, bidangAll, sasproAll, lingkupOptions = [] }) {
+    const defaultLingkup = lingkupOptions[0]?.value ?? '';
+
     const { data, setData, post, processing, reset } = useForm({
-        bidang: '', lingkup: '', id_saspro: '', indikator_nama: '',
+        bidang: '', lingkup: defaultLingkup, id_saspro: '', indikator_nama: '',
         indikator_pembilang: '', indikator_penyebut: '', indikator_penjelasan: '',
         sub_indikator: '', indikator_penghitungan: '', tahun: '', tren: ''
     });
@@ -48,8 +50,8 @@ export default function IndikatorTab({ indikators, bidangAll, sasproAll }) {
     const handleEditClick = (item) => {
         setEditData({
             id: item.id,
-            bidang: item.id_bidang,
-            lingkup: item.lingkup,
+            bidang: item.link,
+            lingkup: item.lingkup?.toString() ?? defaultLingkup,
             id_saspro: item.id_saspro,
             indikator_nama: item.indikator_nama,
             indikator_pembilang: item.indikator_pembilang,
@@ -78,13 +80,7 @@ export default function IndikatorTab({ indikators, bidangAll, sasproAll }) {
         );
     };
 
-    const getLingkupLabel = (val) => {
-        const map = {
-            0: 'Semua Satker', 1: 'Pusat', 2: 'Kejati', 3: 'Kejari', 
-            4: 'Cabjari', 5: 'Kejati, Kejari', 6: 'Kejari, Cabjari', 7: 'Kejati, Kejari, Cabjari'
-        };
-        return map[val] || val;
-    };
+    const getLingkupLabel = (val) => lingkupOptions.find(option => String(option.value) === String(val))?.label || val;
 
     return (
         <Box>
@@ -108,7 +104,7 @@ export default function IndikatorTab({ indikators, bidangAll, sasproAll }) {
                                 <FormControl fullWidth margin="normal">
                                     <InputLabel>Lingkup</InputLabel>
                                     <Select value={data.lingkup} label="Lingkup" onChange={e => setData('lingkup', e.target.value)}>
-                                        {[0,1,2,3,4,5,6,7].map(val => (<MenuItem key={val} value={val}>{getLingkupLabel(val)}</MenuItem>))}
+                                        {lingkupOptions.map(option => (<MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>))}
                                     </Select>
                                 </FormControl>
                             </Grid>

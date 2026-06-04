@@ -29,8 +29,9 @@ export default function Monitoring() {
         }
     };
     
-    // Tentukan apakah user boleh mencari (sesuai logika Blade)
-    const canSearch = levelSakip == 99 || levelSakip == 0 || !String(id_satker).startsWith('was');
+    // Tentukan apakah user boleh mencari (sesuai hak akses monitoring)
+    const canSearch = [99, 1, 0, 2].includes(Number(levelSakip))
+        || ['admin', '999999', 'menpanrb', 'Pengawasan', 'Panev'].includes(String(id_satker));
 
     return (
         <AuthenticatedLayout>

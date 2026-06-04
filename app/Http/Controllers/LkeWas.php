@@ -18,6 +18,8 @@ use App\Models\{
     sample_skp, sk_pk, sk_pm, tar_pm, TlLheAkip, tar_lkjip, ss_perencanaan, 
     ss_laporanweb, ss_laporanapp, nodis_datakinerja, RapatStaffEka
 };
+use App\Services\LkeBuktiDukungService;
+use App\Services\SatkerAccessService;
 
 class LkeWas extends Controller
 {
@@ -52,32 +54,16 @@ class LkeWas extends Controller
     {  if(!session()->has('tahun_terpilih')) {
             return redirect()->route('pilih.tahun');
         }
+        $access = app(SatkerAccessService::class);
+        $access->abortUnlessScopedSatkerPage();
+
         $tahun = session('tahun_terpilih');
-        // $id_satker = preg_replace('/^was/i', '', session('id_satker'));
-        $id_satker = session('id_satker');
+        $id_satker = (string) session('id_satker');
         $perPage = $this->perPage($request);
         $search = trim((string) $request->input('search'));
-        
-        $id_kejati = DB::table('sinori_login')->where('id_satker', $id_satker)->first();
         $level = session('id_sakip_level');
-
-        if (!$id_kejati) {
-            return back()->with('error', 'Data Kejati tidak ditemukan');
-        }
-
-        if (in_array($id_satker, [999999, 'admin', 'Pengawasan', 'Panev', 'menpanrb'])) {
-            // Ambil semua satker, urutkan berdasarkan id_kejati
-            $query = DB::table('sinori_login')
-                ->whereNotIn('id_satker', [888881, 888882, 'admin', 999999, 'Pengawasan', 'Panev', 'menpanrb']) // dikecualikan
-                ->where('id_satker', 'not like', 'was%')
-                ->where('id_satker', 'not like', '00budi')
-                ->where('id_kejati', 'not like', '87'); // dikecualikan
-        } else {
-            // Ambil data satkernama dan id_satker sesuai id_kejati
-            $query = DB::table('sinori_login')
-                ->where('id_kejati', $id_kejati->id_kejati)
-                ->where('id_satker', 'not like', 'was%'); // dikecualikan
-        }
+        $query = $access->scopedSatkerQuery($id_satker, $level)
+            ->select('id_satker', 'satkernama', 'id_kejati', 'id_kejari', 'id_sakip_level');
 
         if ($search !== '') {
             $query->where(function ($query) use ($search) {
@@ -100,6 +86,10 @@ class LkeWas extends Controller
                 'per_page' => $perPage,
             ],
             'perPageOptions' => [10, 50],
+            'accessScope' => [
+                'can_see_all' => $access->canSeeAllSatkers($id_satker, $level),
+                'level' => (int) $level,
+            ],
         ]);
     }
 
@@ -107,12 +97,20 @@ class LkeWas extends Controller
     {
         if (!session()->has('tahun_terpilih')) return redirect()->route('pilih.tahun');
 
+        $access = app(SatkerAccessService::class);
+        $access->abortUnlessScopedSatkerPage();
+
         $tahun = session('tahun_terpilih');
-        $idSatker = $request->id_satker;
+        $idSatker = (string) ($request->route('id_satker') ?? $request->id_satker);
+        $access->abortUnlessCanAccessSatker($idSatker);
 
         // Ambil nama satker
-        $nama_satker = DB::table('sinori_login')->where('id_satker', $idSatker)->value('satkernama');
-        $satkernama = str_replace('_', ' ', $nama_satker);
+        $targetSatker = $access->satker($idSatker);
+        abort_unless($targetSatker, 404);
+
+        $satkernama = str_replace('_', ' ', (string) $targetSatker->satkernama);
+        $lkeGrouped = app(LkeBuktiDukungService::class)->grouped((string) $idSatker, $tahun);
+/*
 
         // ==========================================
         // 🚀 ALGORITMA MEMBACA FILE DARI SISTEM (CLONING EVALUASI CONTROLLER)
@@ -189,6 +187,7 @@ class LkeWas extends Controller
         $lkeGrouped = $lkeDataFlat->groupBy('id_komponen')->map(fn($subItems) => $subItems->groupBy('id_sub_komponen'));
 
         // 4. Ambil File Ekstra
+*/
         $lheAkipFiles = \App\Models\LheAkip::select('id', 'id_filename', 'id_periode', 'id_perubahan', 'id_tglupload')
             ->where('id_satker', $idSatker)->where('id_periode', $tahun)->orderByDesc('id')->get();
             

@@ -11,9 +11,13 @@ class Indikator extends Model
 
     // Nama tabel
     protected $table = 'sinori_sakip_indikator';
+    protected $primaryKey = 'id';
+    public $incrementing = false;
+    protected $keyType = 'string';
 
     // Kolom yang dapat diisi
     protected $fillable = [
+        'id',
         'id_saspro',
         'link',
         'lingkup',

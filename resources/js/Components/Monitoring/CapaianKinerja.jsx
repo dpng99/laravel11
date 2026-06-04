@@ -47,7 +47,7 @@ export default function CapaianKinerja({ selectedSatker }) {
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                             {bidangs.map((bidang) => (
                                 <Button
-                                    key={bidang.bidang_lokasi === bidangLokasi}
+                                    key={bidang.id}
                                     variant={selectedRumpun === bidang.rumpun ? "contained" : "outlined"}
                                     onClick={() => setSelectedRumpun(bidang.rumpun)}
                                 >

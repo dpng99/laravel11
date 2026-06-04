@@ -6,12 +6,295 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Bidang;
 use App\Models\Indikator;
-use App\Models\Pengukuran;
-use App\Models\sastra_indikator_view;
+use App\Services\SatkerAccessService;
 use Inertia\Inertia;
 
 class MonitoringController extends Controller
 {
+    private function normalizeTriwulan($triwulan): int
+    {
+        $tw = (int) $triwulan;
+
+        return $tw >= 1 && $tw <= 4 ? $tw : 1;
+    }
+
+    private function triwulanBulan(int $triwulan): int
+    {
+        return $this->normalizeTriwulan($triwulan) * 3;
+    }
+
+    private function completedTriwulanForYear($tahun): int
+    {
+        preg_match('/\d{4}/', (string) $tahun, $matches);
+        $selectedYear = isset($matches[0]) ? (int) $matches[0] : 0;
+
+        if ($selectedYear === 0) {
+            return 4;
+        }
+
+        $now = now(config('app.timezone', 'Asia/Jakarta'));
+        $currentYear = (int) $now->year;
+
+        if ($selectedYear < $currentYear) {
+            return 4;
+        }
+
+        if ($selectedYear > $currentYear) {
+            return 0;
+        }
+
+        return max(0, min(4, intdiv(((int) $now->month - 1), 3)));
+    }
+
+    private function indicatorLabels(?string $rawLabels): array
+    {
+        $labels = collect(explode(',', strtolower((string) $rawLabels)))
+            ->map(fn ($label) => trim($label))
+            ->filter()
+            ->values()
+            ->all();
+
+        return $labels ?: ['ditangani', 'diselesaikan'];
+    }
+
+    private function numberValue($value): ?float
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+        if ($value === '' || $value === '-') {
+            return null;
+        }
+
+        $value = str_replace(['%', ' '], '', $value);
+
+        if (str_contains($value, ',') && str_contains($value, '.')) {
+            if (strrpos($value, ',') > strrpos($value, '.')) {
+                $value = str_replace('.', '', $value);
+                $value = str_replace(',', '.', $value);
+            } else {
+                $value = str_replace(',', '', $value);
+            }
+        } elseif (str_contains($value, ',')) {
+            if (preg_match('/^-?\d{1,3}(,\d{3})+$/', $value)) {
+                $value = str_replace(',', '', $value);
+            } else {
+                $value = str_replace(',', '.', $value);
+            }
+        } elseif (preg_match('/^-?\d{1,3}(\.\d{3}){2,}$/', $value)) {
+            $value = str_replace('.', '', $value);
+        }
+
+        $value = preg_replace('/[^0-9.\-]/', '', $value);
+
+        return is_numeric($value) ? (float) $value : null;
+    }
+
+    private function summarizePengukuran($rows, array $labels, int $bulan): array
+    {
+        $rows = collect($rows);
+        $totalDitangani = 0.0;
+        $totalDiselesaikan = 0.0;
+        $capaianValues = $rows
+            ->filter(fn ($row) => (int) $row->bulan === $bulan)
+            ->map(fn ($row) => $this->numberValue($row->capaian ?? null))
+            ->filter(fn ($value) => $value !== null)
+            ->values();
+
+        if ($capaianValues->isNotEmpty()) {
+            return [
+                'persentase' => round($capaianValues->avg(), 2),
+                'total_ditangani' => $totalDitangani,
+                'total_diselesaikan' => $totalDiselesaikan,
+            ];
+        }
+
+        if (count($labels) === 1) {
+            return [
+                'persentase' => null,
+                'total_ditangani' => $totalDitangani,
+                'total_diselesaikan' => $totalDiselesaikan,
+            ];
+        }
+
+        $persentaseSub = [];
+        $rows
+            ->filter(fn ($row) => (int) $row->bulan >= 1 && (int) $row->bulan <= $bulan)
+            ->groupBy(fn ($row) => ($row->id_satker ?? '') . '|' . trim((string) ($row->sub_indikator ?? '')))
+            ->each(function ($subRows) use (&$persentaseSub, &$totalDitangani, &$totalDiselesaikan) {
+                $penyebut = 0.0;
+                $pembilang = 0.0;
+
+                foreach ($subRows as $row) {
+                    $parts = collect(explode(';', (string) ($row->perhitungan ?? '')))
+                        ->map(fn ($part) => $this->numberValue($part))
+                        ->values();
+
+                    if ($parts->count() < 2) {
+                        continue;
+                    }
+
+                    $a = $parts->get(0);
+                    $b = $parts->get(1);
+
+                    if ($a !== null) {
+                        $penyebut += $a;
+                        $totalDitangani += $a;
+                    }
+
+                    if ($b !== null) {
+                        $pembilang += $b;
+                        $totalDiselesaikan += $b;
+                    }
+                }
+
+                if ($penyebut > 0) {
+                    $persentaseSub[] = round(($pembilang / $penyebut) * 100, 2);
+                }
+            });
+
+        return [
+            'persentase' => $persentaseSub ? round(array_sum($persentaseSub) / count($persentaseSub), 2) : null,
+            'total_ditangani' => round($totalDitangani, 2),
+            'total_diselesaikan' => round($totalDiselesaikan, 2),
+        ];
+    }
+
+    private function targetValue($targetRows, int $triwulan): float
+    {
+        $column = 'target_triwulan_' . $this->normalizeTriwulan($triwulan);
+
+        $values = collect($targetRows)
+            ->map(function ($row) use ($column) {
+                $triwulanValue = $this->numberValue($row->{$column} ?? null);
+
+                if ($triwulanValue !== null && $triwulanValue > 0) {
+                    return $triwulanValue;
+                }
+
+                return $this->numberValue($row->target_tahun ?? null);
+            })
+            ->filter(fn ($value) => $value !== null)
+            ->values();
+
+        return $values->isNotEmpty() ? round($values->avg(), 2) : 0.0;
+    }
+
+    private function mergedPengukuranText($rows, string $column, int $bulan): string
+    {
+        $rows = collect($rows);
+        $text = $rows
+            ->filter(fn ($row) => (int) $row->bulan === $bulan)
+            ->map(fn ($row) => trim((string) ($row->{$column} ?? '')))
+            ->filter()
+            ->unique()
+            ->values()
+            ->implode("\n");
+
+        if ($text !== '') {
+            return $text;
+        }
+
+        return $rows
+            ->filter(fn ($row) => (int) $row->bulan >= 1 && (int) $row->bulan <= $bulan)
+            ->sortByDesc(fn ($row) => (int) $row->bulan)
+            ->map(fn ($row) => trim((string) ($row->{$column} ?? '')))
+            ->filter()
+            ->unique()
+            ->values()
+            ->implode("\n");
+    }
+
+    private function applyLingkupFilter($query, $level): void
+    {
+        if ($level == 1) {
+            $query->whereIn('lingkup', [0, 1]);
+        } elseif ($level == 2) {
+            $query->whereIn('lingkup', [0, 2, 5, 7]);
+        } elseif ($level == 3) {
+            $query->whereIn('lingkup', [0, 3, 5, 6, 7]);
+        } elseif ($level == 4) {
+            $query->whereIn('lingkup', [0, 4, 6, 7]);
+        }
+    }
+
+    private function canSeeAllMonitoringSatkers(string $idSatker, $level): bool
+    {
+        return app(SatkerAccessService::class)->canSeeAllSatkers($idSatker, $level);
+    }
+
+    private function monitoringSatkerQuery()
+    {
+        return app(SatkerAccessService::class)->baseSatkerQuery();
+    }
+
+    private function monitoringSatkers(string $idSatker, $level, $login)
+    {
+        $query = $this->monitoringSatkerQuery();
+
+        if ($this->canSeeAllMonitoringSatkers($idSatker, $level)) {
+            return $query->pluck('id_satker');
+        }
+
+        if ((int) $level === 2 && $login) {
+            return $query
+                ->where('id_kejati', $login->id_kejati)
+                ->pluck('id_satker');
+        }
+
+        return collect([$idSatker]);
+    }
+
+    private function selectableMonitoringSatkers(string $idSatker, $level, $login)
+    {
+        $query = $this->monitoringSatkerQuery()
+            ->select('id_satker', 'satkernama', 'id_kejati', 'id_kejari', 'id_sakip_level');
+
+        if (! $this->canSeeAllMonitoringSatkers($idSatker, $level)) {
+            if ((int) $level === 2 && $login) {
+                $query->where('id_kejati', $login->id_kejati);
+            } else {
+                $query->where('id_satker', $idSatker);
+            }
+        }
+
+        return $query
+            ->orderBy('id_kejati', 'asc')
+            ->orderBy('id_kejari', 'asc')
+            ->get();
+    }
+
+    private function requestedIndicatorIds(): array
+    {
+        return collect(explode(',', (string) request('indikator_ids', '')))
+            ->map(fn ($id) => trim($id))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function applyMasterTahunFilter($query, string $tahun): void
+    {
+        $query->where(function ($query) use ($tahun) {
+            $query->whereNull('tahun')
+                ->orWhere('tahun', '')
+                ->orWhere('tahun', $tahun)
+                ->orWhere('tahun', 'LIKE', "%{$tahun}%");
+        });
+    }
+
+    private function applyMasterHideFilter($query): void
+    {
+        $query->where(function ($query) {
+            $query->whereNull('hide')
+                ->orWhere('hide', '')
+                ->orWhere('hide', '0')
+                ->orWhere('hide', 0);
+        });
+    }
+
     /**
      * Halaman Utama Monitoring
      */
@@ -23,37 +306,25 @@ class MonitoringController extends Controller
 
         $id_satker = session('id_satker');
         $tahun = session('tahun_terpilih');
-        $level = session('id_sakip_level');
+        $userLevel = session('id_sakip_level');
+        $level = $userLevel;
         $search = $request->get('satker');
 
         // Ambil info user saat ini
         $id = DB::table('sinori_login')->where('id_satker', $id_satker)->first();
 
         // 1. Logika Penentuan Daftar Satker Pengonfirmasi Hak Akses
-        if (in_array($id_satker, [999999, 'admin', 'Pengawasan', 'Panev', 'menpanrb'])) {
-            $satkers = DB::table('sinori_login')
-                ->whereNotIn('id_satker', [888881, 888882, 'admin', 999999, 'Pengawasan', 'Panev', 'menpanrb'])
-                ->where('id_satker', 'not like', 'was%')
-                ->where('id_satker', 'not like', '00budi')
-                ->where('id_kejati', 'not like', '87')
-                ->orderBy('id_kejati', 'asc')
-                ->orderBy('id_kejari', 'asc')
-                ->get();
-        } else {
-            if ($id) {
-                $satkers = DB::table('sinori_login')
-                    ->where('id_kejati', $id->id_kejati)
-                    ->where('id_satker', 'not like', 'was%')
-                    ->get();
-            } else {
-                $satkers = collect();
-            }
+        $satkers = $this->selectableMonitoringSatkers((string) $id_satker, $userLevel, $id);
+        $allowedSatkers = $satkers->pluck('id_satker')->map(fn ($satker) => (string) $satker);
+
+        if (! $search && ! $this->canSeeAllMonitoringSatkers((string) $id_satker, $userLevel) && (int) $userLevel !== 2) {
+            $search = $id_satker;
         }
 
         $selectedSatker = null;
         $bidangs = [];
 
-        if ($search) {
+        if ($search && $allowedSatkers->contains((string) $search)) {
             $selectedSatker = DB::table('sinori_login')
                 ->where('id_satker', $search)
                 ->first(['id_satker', 'satkernama', 'id_kejati', 'id_kejari', 'id_sakip_level']);
@@ -103,7 +374,9 @@ class MonitoringController extends Controller
             'satkers' => $satkers,
             'search' => $search,
             'selectedSatker' => $selectedSatker,
-            'bidangs' => $bidangs
+            'bidangs' => $bidangs,
+            'id_satker' => $id_satker,
+            'levelSakip' => $userLevel,
         ]);
     }
 
@@ -112,6 +385,10 @@ class MonitoringController extends Controller
      */
     public function getBidang($idSatker)
     {
+        if (! app(SatkerAccessService::class)->canAccessSatker((string) $idSatker)) {
+            return response()->json(['error' => 'Anda tidak memiliki akses ke satker ini'], 403);
+        }
+
         $satker = DB::table('sinori_login')->where('id_satker', $idSatker)->first();
 
         if (!$satker) {
@@ -155,14 +432,22 @@ class MonitoringController extends Controller
      */
     public function getSubIndikator2($rumpun, Request $request)
     {
+        if (! session()->has('tahun_terpilih')) {
+            return response()->json(['error' => 'Tahun belum dipilih'], 400);
+        }
+
         $tahun = session('tahun_terpilih');
-        $tw = $request->query('triwulan', 1);
-        $bulan_awal = ($tw - 1) * 3 + 1;
-        $bulan_akhir = $bulan_awal + 2;
+        $tw = $this->normalizeTriwulan($request->query('triwulan', 1));
+        $bulan = $this->triwulanBulan($tw);
+        $maxCompletedTw = $this->completedTriwulanForYear($tahun);
 
         $id_satker = $request->query('id_satker');
         if (!$id_satker) {
             return response()->json(['error' => 'id_satker tidak ditemukan'], 400);
+        }
+
+        if (! app(SatkerAccessService::class)->canAccessSatker((string) $id_satker)) {
+            return response()->json(['error' => 'Anda tidak memiliki akses ke satker ini'], 403);
         }
 
         $satkerData = DB::table('sinori_login')
@@ -175,95 +460,64 @@ class MonitoringController extends Controller
 
         $level = $satkerData->id_sakip_level;
 
-        $indikators = Indikator::where('link', $rumpun)
+        $indikators = Indikator::query()
+            ->where('link', $rumpun)
             ->where('tahun', 'LIKE', "%$tahun%")
             ->where(function ($query) use ($level) {
-                if ($level == 1) {
-                    $query->whereIn('lingkup', [0, 1]);
-                } elseif ($level == 2) {
-                    $query->whereIn('lingkup', [0, 2, 5, 7]);
-                } elseif ($level == 3) {
-                    $query->whereIn('lingkup', [0, 3, 5, 6, 7]);
-                } elseif ($level == 4) {
-                    $query->whereIn('lingkup', [0, 4, 6, 7]);
-                }
+                $this->applyLingkupFilter($query, $level);
             })
+            ->orderBy('id')
             ->get();
+
+        if ($tw > $maxCompletedTw) {
+            return response()->json([]);
+        }
+
+        $pengukuranByIndikator = DB::table('pengukuran')
+            ->where('id_satker', $id_satker)
+            ->where('tahun', $tahun)
+            ->whereIn('indikator_id', $indikators->pluck('id'))
+            ->whereBetween('bulan', [1, $bulan])
+            ->get([
+                'indikator_id',
+                'id_satker',
+                'bulan',
+                'sub_indikator',
+                'capaian',
+                'perhitungan',
+                'faktor',
+                'langkah_optimalisasi',
+            ])
+            ->groupBy('indikator_id');
+
+        $targetByIndikator = DB::table('target')
+            ->where('id_satker', $id_satker)
+            ->where('tahun', $tahun)
+            ->whereIn('indikator_id', $indikators->pluck('id'))
+            ->get()
+            ->groupBy('indikator_id');
 
         $data = [];
 
         foreach ($indikators as $indikator) {
-            $persentase = 0;
-            $labels = !empty($indikator->indikator_penghitungan)
-                ? array_map('trim', explode(',', strtolower($indikator->indikator_penghitungan)))
-                : ['ditangani', 'diselesaikan'];
-
-            if (count($labels) == 1) {
-                $persentase = DB::table('pengukuran')
-                    ->where('id_satker', $id_satker)
-                    ->where('tahun', $tahun)
-                    ->where('indikator_id', $indikator->id)
-                    ->where('bulan', $bulan_akhir)
-                    ->orderBy('id', 'desc')
-                    ->value('capaian') ?? 0;
-            } elseif (count($labels) > 1) {
-                $rows = DB::table('pengukuran')
-                    ->where('id_satker', $id_satker)
-                    ->where('tahun', $tahun)
-                    ->where('indikator_id', $indikator->id)
-                    ->whereBetween('bulan', [1, $bulan_akhir])
-                    ->get(['sub_indikator', 'perhitungan']);
-
-                $persentaseSub = [];
-
-                foreach ($rows->groupBy('sub_indikator') as $subIndikator => $dataRow) {
-                    $pembilang = 0; $penyebut = 0;
-                    foreach ($dataRow as $row) {
-                        if (!empty($row->perhitungan) && str_contains($row->perhitungan, ';')) {
-                            [$a, $b] = explode(';', $row->perhitungan);
-                            $penyebut += (float) $a;
-                            $pembilang += (float) $b;
-                        }
-                    }
-                    if ($penyebut > 0) {
-                        $persentaseSub[] = round(($pembilang / $penyebut) * 100, 2);
-                    }
-                }
-
-                $persentase = count($persentaseSub) > 0
-                    ? round(array_sum($persentaseSub) / count($persentaseSub), 2)
-                    : 0;
-            }
-
-            $target_pk = DB::table('target')
-                ->where('id_satker', $id_satker)
-                ->where('tahun', $tahun)
-                ->where('indikator_id', $indikator->id)
-                ->value('target_tahun') ?? 0;
-
+            $labels = $this->indicatorLabels($indikator->indikator_penghitungan);
+            $rows = $pengukuranByIndikator->get($indikator->id, collect());
+            $summary = $this->summarizePengukuran($rows, $labels, $bulan);
+            $persentase = $summary['persentase'] ?? 0;
+            $target_pk = $this->targetValue($targetByIndikator->get($indikator->id, collect()), $tw);
             $capaian_pk = $target_pk > 0 ? round(($persentase / $target_pk) * 100, 2) : 0;
-
-            $first = DB::table('pengukuran')
-                ->where('id_satker', $id_satker)
-                ->where('tahun', $tahun)
-                ->where('indikator_id', $indikator->id)
-                ->where('bulan', $bulan_akhir)
-                ->where(function ($q) {
-                    $q->whereNotNull('faktor')->orWhereNotNull('langkah_optimalisasi');
-                })
-                ->orderBy('bulan', 'desc')
-                ->orderBy('id', 'desc')
-                ->first();
 
             $data[] = [
                 'indikator_id' => $indikator->id,
                 'indikator_nama' => $indikator->indikator_nama,
                 'indikator_penghitungan' => $indikator->indikator_penghitungan ?: 'Ditangani, Diselesaikan',
+                'total_ditangani' => $summary['total_ditangani'],
+                'total_diselesaikan' => $summary['total_diselesaikan'],
                 'persentase' => $persentase,
                 'target_pk' => $target_pk,
                 'capaian_pk' => $capaian_pk,
-                'faktor' => $first->faktor ?? '',
-                'langkah' => $first->langkah_optimalisasi ?? '',
+                'faktor' => $this->mergedPengukuranText($rows, 'faktor', $bulan),
+                'langkah' => $this->mergedPengukuranText($rows, 'langkah_optimalisasi', $bulan),
                 'id_kejati' => $satkerData->id_kejati,
                 'id_kejari' => $satkerData->id_kejari,
                 'satkernama' => $satkerData->satkernama,
@@ -283,10 +537,22 @@ class MonitoringController extends Controller
     public function searchSatker(Request $request)
     {
         $keyword = $request->query('q', $request->query('term', ''));
+        $id_satker = (string) session('id_satker');
+        $level = session('id_sakip_level');
+        $login = DB::table('sinori_login')->where('id_satker', $id_satker)->first();
 
-        $satkers = DB::table('sinori_login')
-            ->select('id_satker', 'satkernama', 'id_kejati', 'id_kejari', 'id_sakip_level')
-            ->where('id_satker', 'not like', 'was%')
+        $query = $this->monitoringSatkerQuery()
+            ->select('id_satker', 'satkernama', 'id_kejati', 'id_kejari', 'id_sakip_level');
+
+        if (! $this->canSeeAllMonitoringSatkers($id_satker, $level)) {
+            if ((int) $level === 2 && $login) {
+                $query->where('id_kejati', $login->id_kejati);
+            } else {
+                $query->where('id_satker', $id_satker);
+            }
+        }
+
+        $satkers = $query
             ->where(function ($query) use ($keyword) {
                 if ($keyword !== '') {
                     $query->where('id_satker', 'like', "%{$keyword}%")
@@ -315,154 +581,143 @@ class MonitoringController extends Controller
             return response()->json(['error' => 'Tahun belum dipilih'], 400);
         }
 
-        $id_satker = session('id_satker');
+        $id_satker = (string) session('id_satker');
         $tahun     = session('tahun_terpilih');
         $level     = session('id_sakip_level');
 
         $id = DB::table('sinori_login')->where('id_satker', $id_satker)->first();
-        $satkers = collect();
-        $indikatorIds = [];
+        $satkers = $this->monitoringSatkers($id_satker, $level, $id)
+            ->filter()
+            ->map(fn ($satker) => (string) $satker)
+            ->values();
 
-        if (request()->has('indikator_ids') && !empty(request('indikator_ids'))) {
-            $indikatorIds = explode(',', request('indikator_ids'));
+        if ($satkers->isEmpty()) {
+            return response()->json([]);
         }
 
-        // --- REFAKTOR LOGIKA HAK AKSES PUSAT ---
-        if (in_array($id_satker, ['admin', 'menpanrb', 'Pengawasan', 'Panev'])) {
-            $satkers = DB::table('sinori_login')
-                ->whereIn('id_sakip_level', [1, 2, 3, 4])
-                ->pluck('id_satker');
+        $sastraQuery = DB::table('sakip_sastra_new')
+            ->select(['id_sastra', 'nama_sastra', 'target', 'tahun', 'hide', 'urutan', 'link', 'lingkup']);
+        $this->applyMasterTahunFilter($sastraQuery, (string) $tahun);
+        $this->applyMasterHideFilter($sastraQuery);
 
-            // Khusus menpanrb, Pengawasan, Panev: injeksi kode_indikator default jika tidak ada request filter
-            if (in_array($id_satker, ['menpanrb', 'Pengawasan', 'Panev']) && empty($indikatorIds)) {
-                $indikatorIds = [100, 101, 102, 103, 104, 105, 107, 109];
-            }
-        } elseif ($level === 0 && $id) {
-            // Level Kejati
-            if (empty($indikatorIds)) {
-                $indikatorIds = sastra_indikator_view::select('kode_indikator')->pluck('kode_indikator')->toArray();
-            }
-            $satkers = DB::table('sinori_login')
-                ->where('id_kejati', $id->id_kejati)
-                ->whereRaw("id_satker NOT LIKE 'was%'")
-                ->pluck('id_satker');
-        } else {
-            // Level Satker Mandiri
-            $satkers = collect([$id_satker]);
+        $sastras = $sastraQuery
+            ->orderByRaw('COALESCE(urutan, 999999), id_sastra')
+            ->get();
+
+        if ($sastras->isEmpty()) {
+            return response()->json([]);
         }
 
-        // Ambil saspro terkait indikator dari View
-        $sastraId = sastra_indikator_view::where('tahun', 'LIKE', "%$tahun%")
-            ->when(!empty($indikatorIds), fn($q) => $q->whereIn('kode_indikator', $indikatorIds))
-            ->distinct()
-            ->pluck('id_sastra');
+        $requestedIndicatorIds = $this->requestedIndicatorIds();
+        $indikatorQuery = DB::table('indikator_sastra')
+            ->select(['kode_indikator', 'kode_sastra', 'nama_indikator', 'tahun', 'hide', 'urutan', 'link', 'lingkup'])
+            ->whereIn('kode_sastra', $sastras->pluck('id_sastra'))
+            ->when($requestedIndicatorIds, fn ($query) => $query->whereIn('kode_indikator', $requestedIndicatorIds));
+
+        $this->applyMasterTahunFilter($indikatorQuery, (string) $tahun);
+        $this->applyMasterHideFilter($indikatorQuery);
+
+        if (! $this->canSeeAllMonitoringSatkers($id_satker, $level)) {
+            $this->applyLingkupFilter($indikatorQuery, $level);
+        }
+
+        $indikators = $indikatorQuery
+            ->orderBy('kode_sastra')
+            ->orderByRaw('COALESCE(urutan, 999999), kode_indikator')
+            ->get();
+
+        if ($indikators->isEmpty()) {
+            return response()->json([]);
+        }
+
+        $indikatorIds = $indikators->pluck('kode_indikator');
+        $penghitunganByIndikator = Indikator::query()
+            ->whereIn('id', $indikatorIds)
+            ->where('tahun', 'LIKE', "%{$tahun}%")
+            ->get(['id', 'indikator_penghitungan'])
+            ->keyBy(fn ($indikator) => (string) $indikator->id);
+
+        $pengukuranByIndikator = DB::table('pengukuran')
+            ->whereIn('id_satker', $satkers)
+            ->where('tahun', $tahun)
+            ->whereIn('indikator_id', $indikatorIds)
+            ->whereBetween('bulan', [1, 12])
+            ->get([
+                'indikator_id',
+                'id_satker',
+                'bulan',
+                'sub_indikator',
+                'capaian',
+                'perhitungan',
+            ])
+            ->groupBy('indikator_id');
+
+        $targetByIndikator = DB::table('target')
+            ->whereIn('id_satker', $satkers)
+            ->where('tahun', $tahun)
+            ->whereIn('indikator_id', $indikatorIds)
+            ->get()
+            ->groupBy('indikator_id');
 
         $dataSastra = [];
-        $twBulan = [
-            1 => [1, 2, 3],
-            2 => [4, 5, 6],
-            3 => [7, 8, 9],
-            4 => [10, 11, 12],
-        ];
+        $indikatorsBySastra = $indikators->groupBy(fn ($indikator) => (string) $indikator->kode_sastra);
+        $maxCompletedTw = $this->completedTriwulanForYear($tahun);
 
-        foreach ($sastraId as $id_sastra) {
-            $saspro = DB::table('sakip_sastra_new')
-                ->where('id_sastra', $id_sastra)
-                ->first(['nama_sastra']);
-            if (!$saspro) continue;
-
-            // Perbaikan sintaks: format array pada get() Eloquent
-            $indikators = sastra_indikator_view::where('id_sastra', $id_sastra)
-                ->get(['id', 'kode_indikator', 'indikator_nama', 'indikator_penghitungan', 'target']);
-
+        foreach ($sastras as $sastra) {
+            $indikatorRows = $indikatorsBySastra->get((string) $sastra->id_sastra, collect());
             $indikatorData = [];
-            $sumAllCapaian = 0.0;
-            $countAllCapaian = 0;
+            $allPersentase = [];
+            $allCapaianTarget = [];
 
-            foreach ($indikators as $indikator) {
-                // Validasi filter in_array menggunakan kode_indikator (huruf/kode)
-                if (in_array($id_satker, ['menpanrb', 'Pengawasan', 'Panev']) || ($level == 0)) {
-                    if (!in_array($indikator->kode_indikator, $indikatorIds)) continue;
-                }
-
-                $target = is_numeric($indikator->target) ? (float)$indikator->target : 0;
+            foreach ($indikatorRows as $indikator) {
+                $kodeIndikator = (string) $indikator->kode_indikator;
+                $labels = $this->indicatorLabels($penghitunganByIndikator->get($kodeIndikator)?->indikator_penghitungan);
+                $rows = $pengukuranByIndikator->get($kodeIndikator, collect());
+                $targetRows = $targetByIndikator->get($kodeIndikator, collect());
 
                 $indikatorTW = [
-                    'id' => $indikator->id,
-                    'kode_indikator' => $indikator->kode_indikator,
-                    'nama' => $indikator->indikator_nama,
+                    'id' => $kodeIndikator,
+                    'kode_indikator' => $kodeIndikator,
+                    'nama' => $indikator->nama_indikator,
                 ];
 
                 for ($tw = 1; $tw <= 4; $tw++) {
-                    $bulanTW = $twBulan[$tw];
-                    $persentaseTW = null;
-
-                    if (str_contains($indikator->indikator_penghitungan, ',')) {
-                        $rows = DB::table('pengukuran')
-                            ->when(!in_array($id_satker, ['admin', 'menpanrb', 'Pengawasan', 'Panev']), fn($q) => $q->whereIn('id_satker', $satkers))
-                            ->where('indikator_id', $indikator->kode_indikator) // Menggunakan string/huruf kode_indikator
-                            ->where('tahun', $tahun)
-                            ->whereIn('bulan', $bulanTW)
-                            ->get(['perhitungan']);
-
-                        $sum = 0; $c = 0;
-                        foreach ($rows as $row) {
-                            if (!empty($row->perhitungan) && str_contains($row->perhitungan, ';')) {
-                                [$penyebut, $pembilang] = array_map('floatval', explode(';', $row->perhitungan));
-                                if ($penyebut > 0) {
-                                    $persen = ($pembilang / $penyebut) * 100;
-                                    if ($persen != 0) {
-                                        $sum += $persen;
-                                        $c++;
-                                    }
-                                }
-                            }
-                        }
-                        $persentaseTW = $c > 0 ? round($sum / $c, 2) : null;
-                    } else {
-                        $rows = DB::table('pengukuran')
-                            ->when(!in_array($id_satker, ['admin', 'menpanrb', 'Pengawasan', 'Panev']), fn($q) => $q->whereIn('id_satker', $satkers))
-                            ->where('indikator_id', $indikator->kode_indikator) // Menggunakan string/huruf kode_indikator
-                            ->where('tahun', $tahun)
-                            ->whereIn('bulan', $bulanTW)
-                            ->whereNotNull('capaian')
-                            ->get(['capaian']);
-
-                        $sum = 0; $count = 0;
-                        foreach ($rows as $row) {
-                            $value = str_replace(',', '.', trim($row->capaian));
-                            if ($value !== '' && is_numeric($value) && (float)$value != 0) {
-                                $sum += (float)$value;
-                                $count++;
-                            }
-                        }
-                        $persentaseTW = $count > 0 ? round($sum / $count, 2) : null;
+                    if ($tw > $maxCompletedTw) {
+                        $indikatorTW["target_tw{$tw}"] = null;
+                        $indikatorTW["capaian_tw{$tw}"] = null;
+                        $indikatorTW["capaian_terhadap_target_tw{$tw}"] = null;
+                        continue;
                     }
 
-                    $indikatorTW["target_tw{$tw}"] = $target;
-                    $indikatorTW["capaian_tw{$tw}"] = $persentaseTW;
-                    $indikatorTW["capaian_terhadap_target_tw{$tw}"] = ($persentaseTW !== null && $target > 0)
+                    $summary = $this->summarizePengukuran($rows, $labels, $this->triwulanBulan($tw));
+                    $persentaseTW = $summary['persentase'];
+                    $target = $persentaseTW !== null ? $this->targetValue($targetRows, $tw) : null;
+                    $capaianTarget = ($persentaseTW !== null && $target !== null && $target > 0)
                         ? round(($persentaseTW / $target) * 100, 2)
                         : null;
 
+                    $indikatorTW["target_tw{$tw}"] = $target;
+                    $indikatorTW["capaian_tw{$tw}"] = $persentaseTW;
+                    $indikatorTW["capaian_terhadap_target_tw{$tw}"] = $capaianTarget;
+
                     if ($persentaseTW !== null) {
-                        $sumAllCapaian += $persentaseTW;
-                        $countAllCapaian++;
+                        $allPersentase[] = $persentaseTW;
+                    }
+
+                    if ($capaianTarget !== null) {
+                        $allCapaianTarget[] = $capaianTarget;
                     }
                 }
 
                 $indikatorData[] = $indikatorTW;
             }
 
-            $rataPersentase = $countAllCapaian > 0 ? round($sumAllCapaian / $countAllCapaian, 2) : null;
-            $rataCapaian = ($rataPersentase !== null && $target > 0) ? round(($rataPersentase / $target) * 100, 2) : null;
-
             $dataSastra[] = [
-                'id_saspro' => $id_sastra,
-                'nama_saspro' => $saspro->nama_sastra ?? 'N/A',
-                'rata_persentase' => $rataPersentase,
-                'rata_capaian' => $rataCapaian,
-                'indikators' => $indikatorData
+                'id_saspro' => (string) $sastra->id_sastra,
+                'nama_saspro' => (string) $sastra->nama_sastra,
+                'rata_persentase' => $allPersentase ? round(array_sum($allPersentase) / count($allPersentase), 2) : null,
+                'rata_capaian' => $allCapaianTarget ? round(array_sum($allCapaianTarget) / count($allCapaianTarget), 2) : null,
+                'indikators' => $indikatorData,
             ];
         }
 

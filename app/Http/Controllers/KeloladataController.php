@@ -2,260 +2,388 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Indikator;
 use App\Models\Bidang;
+use App\Models\Indikator;
 use App\Models\Saspro;
 use App\Models\indikator_sastra_new;
 use App\Models\saspro_indikator_new;
 use App\Models\saspro_new;
 use App\Models\sastra_new;
-use Inertia\Inertia;
-use Illuminate\Support\Facades\Redirect;
+use App\Services\SatkerAccessService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
-use Exception;
+use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Throwable;
 
 class KeloladataController extends Controller
 {
-    /**
-     * Menampilkan halaman utama Kelola Data.
-     */
+    private const PER_PAGE_OPTIONS = [10, 25, 50];
+    private const STATUS_VALUES = ['0', '1'];
+
     public function index(Request $request)
     {
-        if (!session()->has('tahun_terpilih')) {
+        $this->ensureAdmin();
+
+        if (! session()->has('tahun_terpilih')) {
             return redirect()->route('pilih.tahun');
         }
 
-        $tahun = session('tahun_terpilih');
         $perPage = $this->perPage($request);
 
-        $bidangs = Bidang::select(['id', 'bidang_nama', 'bidang_level', 'bidang_lokasi', 'rumpun', 'hide'])
+        return Inertia::render('KelolaData', [
+            'tahun' => session('tahun_terpilih'),
+            'bidangs' => $this->bidangData($request, $perPage),
+            'saspros' => $this->sasproData($request, $perPage),
+            'indikators' => $this->indikatorData($request, $perPage),
+            'bidangall' => $this->bidangOptions(),
+            'sasproAll' => $this->sasproOptions(),
+            'masterDataTabs' => $this->masterDataTabs($request),
+            'lingkupOptions' => $this->lingkupOptions(),
+            'perPageOptions' => self::PER_PAGE_OPTIONS,
+            'canManagePohonKinerja' => $this->isAdmin(),
+            'filters' => $request->only([
+                'search',
+                'pohon_search',
+                'tab',
+                'per_page',
+            ]),
+        ]);
+    }
+
+    // ---------------------------------------------------------------------
+    // Data halaman utama
+    // ---------------------------------------------------------------------
+
+    private function bidangData(Request $request, int $perPage)
+    {
+        return Bidang::select(['id', 'bidang_nama', 'bidang_level', 'bidang_lokasi', 'rumpun', 'hide'])
+            ->when($this->search($request) !== '', function ($query) use ($request) {
+                $search = $this->search($request);
+
+                $query->where(function ($q) use ($search) {
+                    $q->where('bidang_nama', 'like', "%{$search}%")
+                        ->orWhere('rumpun', 'like', "%{$search}%");
+                });
+            })
             ->orderBy('bidang_lokasi')
             ->orderBy('bidang_level')
             ->orderBy('rumpun')
             ->orderBy('id')
             ->paginate($perPage, ['*'], 'bidang_page')
             ->withQueryString();
-            
-        $bidangall = Bidang::select('id', 'bidang_nama', 'rumpun')
-            ->where('hide', 0)
-            ->get();
+    }
 
-        $indikators = Indikator::with(['bidangById', 'saspro'])
-            ->orderBy('tahun', 'desc')
-            ->orderBy('link', 'asc')
+    private function sasproData(Request $request, int $perPage)
+    {
+        return Saspro::with('bidang:id,bidang_nama')
+            ->when($this->search($request) !== '', function ($query) use ($request) {
+                $search = $this->search($request);
+
+                $query->where(function ($q) use ($search) {
+                    $q->where('saspro_nama', 'like', "%{$search}%")
+                        ->orWhere('saspro_penjelasan', 'like', "%{$search}%")
+                        ->orWhere('target', 'like', "%{$search}%");
+                });
+            })
+            ->orderByDesc('tahun')
+            ->orderBy('link')
+            ->orderBy('id')
+            ->paginate($perPage, ['*'], 'saspro_page')
+            ->withQueryString();
+    }
+
+    private function indikatorData(Request $request, int $perPage)
+    {
+        return Indikator::with([
+                'bidangById:id,bidang_nama',
+                'bidangByLink:id,bidang_nama,rumpun',
+                'saspro:id,saspro_nama,tahun',
+            ])
+            ->when($this->search($request) !== '', function ($query) use ($request) {
+                $search = $this->search($request);
+
+                $query->where(function ($q) use ($search) {
+                    $q->where('indikator_nama', 'like', "%{$search}%")
+                        ->orWhere('sub_indikator', 'like', "%{$search}%")
+                        ->orWhere('indikator_penjelasan', 'like', "%{$search}%");
+                });
+            })
+            ->orderByDesc('tahun')
+            ->orderBy('link')
+            ->orderBy('id')
             ->paginate($perPage, ['*'], 'indikator_page')
             ->withQueryString();
+    }
 
-        $saspros = Saspro::with('bidang')
-            ->orderBy('tahun', 'desc')
-            ->orderBy('link', 'asc')
-            ->paginate($perPage, ['*'], 'saspro_page')
-            ->withQueryString(); 
-
-        $sasproAll = Saspro::select('id', 'saspro_nama', 'tahun', 'link')
-            ->orderBy('tahun', 'desc')
-            ->orderBy('link', 'asc')
+    private function bidangOptions()
+    {
+        return Bidang::select(['id', 'bidang_nama', 'rumpun'])
+            ->where('hide', 0)
+            ->orderBy('bidang_lokasi')
+            ->orderBy('bidang_level')
+            ->orderBy('rumpun')
             ->get();
-
-        return Inertia::render('KelolaData', [
-            'tahun'          => $tahun,
-            'bidangs'        => $bidangs,
-            'saspros'        => $saspros,
-            'bidangall'      => $bidangall,
-            'indikators'     => $indikators,
-            'sasproAll'      => $sasproAll,
-            'masterDataTabs' => $this->masterDataTabs($request),
-            'perPageOptions' => [10, 25, 50],
-            'canManagePohonKinerja' => $this->isAdmin(),
-            'filters'        => $request->only(['search', 'pohon_search', 'tab', 'per_page']),
-        ]);
     }
 
-    // =========================================================================
-    // QUERY BUILDERS
-    // =========================================================================
-
-    private function indikatorSastraData(Request $request)
+    private function sasproOptions()
     {
-        $search = trim((string) $request->input('search'));
-
-        return DB::table('indikator_sastra as indikator')
-            ->join('sakip_sastra_new as sastra', 'indikator.kode_sastra', '=', 'sastra.id_sastra')
-            ->select([
-                'indikator.kode_indikator',
-                'indikator.nama_indikator',
-                'indikator.kode_sastra as id_sastra',
-                'sastra.nama_sastra',
-                DB::raw("COALESCE(NULLIF(indikator.link, ''), NULLIF(sastra.link, ''), 0) as link"),
-                DB::raw("COALESCE(NULLIF(indikator.lingkup, ''), NULLIF(sastra.lingkup, ''), 0) as lingkup"),
-                'indikator.deskripsi_indikator_sastra',
-            ])
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('indikator.kode_indikator', 'like', "%{$search}%")
-                      ->orWhere('indikator.nama_indikator', 'like', "%{$search}%")
-                      ->orWhere('indikator.kode_sastra', 'like', "%{$search}%")
-                      ->orWhere('sastra.nama_sastra', 'like', "%{$search}%");
-                });
-            })
-            ->orderBy('indikator.kode_sastra')
-            ->orderBy('indikator.kode_indikator')
-            ->paginate($this->perPage($request), ['*'], 'sastra_page')
-            ->withQueryString();
+        return Saspro::select(['id', 'saspro_nama', 'tahun', 'link'])
+            ->orderByDesc('tahun')
+            ->orderBy('link')
+            ->orderBy('id')
+            ->get();
     }
 
-    private function indikatorSasproData(Request $request)
+    // ---------------------------------------------------------------------
+    // Data Bidang
+    // ---------------------------------------------------------------------
+
+    public function bidang(Request $request)
     {
-        $search = trim((string) $request->input('search'));
-        
-        $sastraScope = DB::table('indikator_sastra')
-            ->select([
-                'kode_sastra',
-                DB::raw("MAX(NULLIF(link, '')) as link"),
-                DB::raw("MAX(NULLIF(lingkup, '')) as lingkup"),
-            ])
-            ->groupBy('kode_sastra');
+        $this->ensureAdmin();
 
-        return DB::table('indikator_saspro as indikator')
-            ->join('sakip_saspro_new as saspro', 'indikator.kode_saspro', '=', 'saspro.id_saspro')
-            ->join('sakip_sastra_new as sastra', 'indikator.kode_sastra', '=', 'sastra.id_sastra')
-            ->leftJoinSub($sastraScope, 'sastra_scope', 'sastra_scope.kode_sastra', '=', 'sastra.id_sastra')
-            ->select([
-                'indikator.kode_indikator',
-                'indikator.nama_indikator',
-                'indikator.kode_sastra as id_sastra',
-                'sastra.nama_sastra',
-                'indikator.kode_saspro as id_saspro',
-                'saspro.nama_saspro',
-                DB::raw("COALESCE(NULLIF(saspro.link, ''), NULLIF(sastra.link, ''), sastra_scope.link, 0) as link"),
-                DB::raw("COALESCE(NULLIF(sastra.lingkup, ''), sastra_scope.lingkup, 0) as lingkup"),
-                'indikator.deskripsi_indikator_saspro',
-            ])
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('indikator.kode_indikator', 'like', "%{$search}%")
-                      ->orWhere('indikator.nama_indikator', 'like', "%{$search}%")
-                      ->orWhere('sastra.nama_sastra', 'like', "%{$search}%")
-                      ->orWhere('saspro.nama_saspro', 'like', "%{$search}%");
-                });
-            })
-            ->orderBy('indikator.kode_sastra')
-            ->orderBy('indikator.kode_saspro')
-            ->orderBy('indikator.kode_indikator')
-            ->paginate($this->perPage($request), ['*'], 'saspro_indikator_page')
-            ->withQueryString();
+        return $this->storeOrUpdateBidang($request);
     }
 
-    private function pohonSastraData(Request $request)
+    public function storeOrUpdateBidang(Request $request)
     {
-        $search = trim((string) $request->input('pohon_search', $request->input('search')));
+        $this->ensureAdmin();
 
-        return DB::table('sakip_sastra_new')
-            ->select($this->selectExistingColumns('sakip_sastra_new', [
-                'id_sastra', 'nama_sastra', 'deskripsi', 'link', 'lingkup', 'target', 'tahun', 'hide', 'urutan'
-            ]))
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where('id_sastra', 'like', "%{$search}%")
-                      ->orWhere('nama_sastra', 'like', "%{$search}%");
-            })
-            ->orderByRaw($this->orderExpression('sakip_sastra_new', 'id_sastra'))
-            ->paginate($this->perPage($request), ['*'], 'pohon_sastra_page')
-            ->withQueryString();
+        $validated = $this->validateBidang($request);
+
+        try {
+            DB::transaction(function () use ($validated) {
+                $payload = [
+                    'bidang_nama' => $validated['bidang_nama'],
+                    'bidang_level' => $validated['bidang_level'],
+                    'bidang_lokasi' => $validated['bidang_lokasi'],
+                    'rumpun' => $validated['rumpun'],
+                    'hide' => $validated['hide'],
+                ];
+
+                if (isset($validated['id'])) {
+                    Bidang::findOrFail($validated['id'])->update($payload);
+
+                    return;
+                }
+
+                Bidang::create($payload);
+            });
+
+            $message = isset($validated['id'])
+                ? 'Data bidang berhasil diperbarui.'
+                : 'Data bidang berhasil disimpan.';
+
+            return Redirect::back()->with('success', $message);
+        } catch (Throwable $e) {
+            Log::error('Keloladata bidang save failed', ['error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal menyimpan data bidang.');
+        }
     }
 
-    private function pohonIndikatorSastraData(Request $request)
+    public function edit($id)
     {
-        $search = trim((string) $request->input('pohon_search', $request->input('search')));
+        $this->ensureAdmin();
 
-        return DB::table('indikator_sastra as indikator')
-            ->leftJoin('sakip_sastra_new as sastra', 'indikator.kode_sastra', '=', 'sastra.id_sastra')
-            ->select([
-                'indikator.kode_indikator', 'indikator.kode_sastra', 'indikator.nama_indikator',
-                'indikator.deskripsi_indikator_sastra', 'sastra.nama_sastra',
-                ...$this->selectExistingColumns('indikator_sastra', ['link', 'lingkup', 'tahun', 'hide', 'urutan'], 'indikator'),
-            ])
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where('indikator.kode_indikator', 'like', "%{$search}%")
-                      ->orWhere('indikator.nama_indikator', 'like', "%{$search}%")
-                      ->orWhere('sastra.nama_sastra', 'like', "%{$search}%");
-            })
-            ->orderBy('indikator.kode_sastra')
-            ->orderByRaw($this->orderExpression('indikator_sastra', 'indikator.kode_indikator', 'indikator'))
-            ->paginate($this->perPage($request), ['*'], 'pohon_indikator_sastra_page')
-            ->withQueryString();
+        return response()->json(Bidang::findOrFail($id));
     }
 
-    private function pohonSasproData(Request $request)
+    public function destroy($id)
     {
-        $search = trim((string) $request->input('pohon_search', $request->input('search')));
+        $this->ensureAdmin();
 
-        return DB::table('sakip_saspro_new as saspro')
-            ->leftJoin('sakip_sastra_new as sastra', 'saspro.id_sastra', '=', 'sastra.id_sastra')
-            ->select([
-                'saspro.id_saspro', 'saspro.id_sastra', 'saspro.nama_saspro', 'saspro.deskripsi', 'sastra.nama_sastra',
-                ...$this->selectExistingColumns('sakip_saspro_new', ['link', 'lingkup', 'tahun', 'hide', 'urutan'], 'saspro'),
-            ])
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where('saspro.id_saspro', 'like', "%{$search}%")
-                      ->orWhere('saspro.nama_saspro', 'like', "%{$search}%")
-                      ->orWhere('sastra.nama_sastra', 'like', "%{$search}%");
-            })
-            ->orderBy('saspro.id_sastra')
-            ->orderByRaw($this->orderExpression('sakip_saspro_new', 'saspro.id_saspro', 'saspro'))
-            ->paginate($this->perPage($request), ['*'], 'pohon_saspro_page')
-            ->withQueryString();
+        $bidang = Bidang::findOrFail($id);
+
+        if (
+            Saspro::where('link', $bidang->id)->exists()
+            || Indikator::where('link', $bidang->id)->exists()
+        ) {
+            return Redirect::back()->with('error', 'Bidang tidak dapat dihapus karena masih dipakai Saspro atau Indikator.');
+        }
+
+        try {
+            $bidang->delete();
+
+            return Redirect::back()->with('success', 'Data bidang berhasil dihapus.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata bidang delete failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal menghapus data bidang.');
+        }
     }
 
-    private function pohonIndikatorSasproData(Request $request)
+    // ---------------------------------------------------------------------
+    // Data Saspro lama
+    // ---------------------------------------------------------------------
+
+    public function sasproStore(Request $request)
     {
-        $search = trim((string) $request->input('pohon_search', $request->input('search')));
+        $this->ensureAdmin();
 
-        return DB::table('indikator_saspro as indikator')
-            ->leftJoin('sakip_sastra_new as sastra', 'indikator.kode_sastra', '=', 'sastra.id_sastra')
-            ->leftJoin('sakip_saspro_new as saspro', 'indikator.kode_saspro', '=', 'saspro.id_saspro')
-            ->select([
-                'indikator.kode_indikator', 'indikator.kode_sastra', 'indikator.kode_saspro',
-                'indikator.nama_indikator', 'indikator.deskripsi_indikator_saspro',
-                'sastra.nama_sastra', 'saspro.nama_saspro',
-                ...$this->selectExistingColumns('indikator_saspro', ['link', 'lingkup', 'tahun', 'hide', 'urutan'], 'indikator'),
-            ])
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where('indikator.kode_indikator', 'like', "%{$search}%")
-                      ->orWhere('indikator.nama_indikator', 'like', "%{$search}%")
-                      ->orWhere('sastra.nama_sastra', 'like', "%{$search}%")
-                      ->orWhere('saspro.nama_saspro', 'like', "%{$search}%");
-            })
-            ->orderBy('indikator.kode_sastra')
-            ->orderBy('indikator.kode_saspro')
-            ->orderByRaw($this->orderExpression('indikator_saspro', 'indikator.kode_indikator', 'indikator'))
-            ->paginate($this->perPage($request), ['*'], 'pohon_indikator_saspro_page')
-            ->withQueryString();
+        $validated = $this->validateSaspro($request);
+
+        try {
+            DB::transaction(fn () => Saspro::create($this->sasproPayload($validated)));
+
+            return Redirect::back()->with('success', 'Data Saspro berhasil disimpan.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata saspro store failed', ['error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal menyimpan data Saspro.');
+        }
     }
 
-    // =========================================================================
-    // MASTER DATA UI TABS SETUP
-    // =========================================================================
+    public function sasproUpdate(Request $request, $id)
+    {
+        $this->ensureAdmin();
+
+        $saspro = Saspro::findOrFail($id);
+        $validated = $this->validateSaspro($request);
+
+        try {
+            DB::transaction(fn () => $saspro->update($this->sasproPayload($validated, $saspro)));
+
+            return Redirect::back()->with('success', 'Data Saspro berhasil diperbarui.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata saspro update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal memperbarui data Saspro.');
+        }
+    }
+
+    public function destroySaspro($id)
+    {
+        $this->ensureAdmin();
+
+        $saspro = Saspro::findOrFail($id);
+
+        if (Indikator::where('id_saspro', $saspro->id)->exists()) {
+            return Redirect::back()->with('error', 'Saspro tidak dapat dihapus karena masih dipakai Indikator.');
+        }
+
+        try {
+            $saspro->delete();
+
+            return Redirect::back()->with('success', 'Data Saspro berhasil dihapus.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata saspro delete failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal menghapus data Saspro.');
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Data Indikator lama
+    // ---------------------------------------------------------------------
+
+    public function indikator(Request $request)
+    {
+        $this->ensureAdmin();
+
+        return $this->storeIndikator($request);
+    }
+
+    public function storeIndikator(Request $request)
+    {
+        $this->ensureAdmin();
+
+        $payload = $this->indikatorPayload($request);
+
+        try {
+            DB::transaction(fn () => Indikator::create($payload));
+
+            return Redirect::back()->with('success', 'Data Indikator berhasil disimpan.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata indikator store failed', ['error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal menyimpan data Indikator.');
+        }
+    }
+
+    public function updateIndikator(Request $request, $id)
+    {
+        $this->ensureAdmin();
+
+        $indikator = Indikator::findOrFail($id);
+        $payload = $this->indikatorPayload($request, $indikator);
+
+        try {
+            DB::transaction(fn () => $indikator->update($payload));
+
+            return Redirect::back()->with('success', 'Data Indikator berhasil diperbarui.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata indikator update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal memperbarui data Indikator.');
+        }
+    }
+
+    public function deleteIndikator($id)
+    {
+        $this->ensureAdmin();
+
+        try {
+            Indikator::findOrFail($id)->delete();
+
+            return Redirect::back()->with('success', 'Data Indikator berhasil dihapus.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata indikator delete failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal menghapus data Indikator.');
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Tab master pohon kinerja
+    // ---------------------------------------------------------------------
 
     private function masterDataTabs(Request $request): array
     {
-        $sastraOptions = DB::table('sakip_sastra_new')->select(['id_sastra', 'nama_sastra'])->orderBy('id_sastra')->get()
-            ->map(fn ($row) => ['value' => (string) $row->id_sastra, 'label' => "{$row->id_sastra} - {$row->nama_sastra}"])->values()->all();
+        $sastraOptions = DB::table('sakip_sastra_new')
+            ->select(['id_sastra', 'nama_sastra'])
+            ->orderByRaw($this->orderExpression('sakip_sastra_new', 'id_sastra'))
+            ->get()
+            ->map(fn ($row) => [
+                'value' => (string) $row->id_sastra,
+                'label' => "{$row->id_sastra} - {$row->nama_sastra}",
+            ])
+            ->values()
+            ->all();
 
-        $sasproOptions = DB::table('sakip_saspro_new')->select(['id_saspro', 'nama_saspro'])->orderBy('id_sastra')->orderBy('id_saspro')->get()
-            ->map(fn ($row) => ['value' => (string) $row->id_saspro, 'label' => "{$row->id_saspro} - {$row->nama_saspro}"])->values()->all();
+        $sasproOptions = DB::table('sakip_saspro_new')
+            ->select(['id_saspro', 'nama_saspro'])
+            ->orderBy('id_sastra')
+            ->orderByRaw($this->orderExpression('sakip_saspro_new', 'id_saspro'))
+            ->get()
+            ->map(fn ($row) => [
+                'value' => (string) $row->id_saspro,
+                'label' => "{$row->id_saspro} - {$row->nama_saspro}",
+            ])
+            ->values()
+            ->all();
 
         $lingkupOptions = $this->lingkupOptions();
         $statusOptions = $this->statusOptions();
+        $defaultLingkup = $this->defaultLingkupValue();
 
         return [
-            // Sastra Tab
             [
-                'key' => 'sastra', 'label' => 'Sasaran Strategis', 'addLabel' => 'Tambah Sastra', 'idKey' => 'id_sastra', 'pageKey' => 'pohon_sastra_page',
-                'routes' => ['store' => 'pohon.sastra.store', 'update' => 'pohon.sastra.update', 'destroy' => 'pohon.sastra.destroy'],
+                'key' => 'sastra',
+                'label' => 'Sasaran Strategis',
+                'addLabel' => 'Tambah Sastra',
+                'idKey' => 'id_sastra',
+                'pageKey' => 'pohon_sastra_page',
+                'routes' => [
+                    'store' => 'pohon.sastra.store',
+                    'update' => 'pohon.sastra.update',
+                    'destroy' => 'pohon.sastra.destroy',
+                ],
                 'columns' => [
                     ['field' => 'id_sastra', 'headerName' => 'Kode', 'width' => 110],
                     ['field' => 'nama_sastra', 'headerName' => 'Sasaran Strategis', 'flex' => 1, 'minWidth' => 260],
@@ -268,15 +396,22 @@ class KeloladataController extends Controller
                     ['name' => 'deskripsi', 'label' => 'Deskripsi', 'multiline' => true, 'md' => 12],
                     ['name' => 'target', 'label' => 'Target', 'md' => 4],
                     ['name' => 'tahun', 'label' => 'Tahun', 'md' => 4],
-                    ['name' => 'lingkup', 'label' => 'Lingkup', 'type' => 'select', 'options' => $lingkupOptions, 'md' => 4, 'default' => '0'],
+                    ['name' => 'lingkup', 'label' => 'Lingkup', 'type' => 'select', 'options' => $lingkupOptions, 'md' => 4, 'default' => $defaultLingkup],
                     ['name' => 'hide', 'label' => 'Status', 'type' => 'select', 'options' => $statusOptions, 'required' => true, 'md' => 4, 'default' => '0'],
                 ],
                 'rows' => $this->pohonSastraData($request),
             ],
-            // Indikator Sastra Tab
             [
-                'key' => 'indikatorSastra', 'label' => 'Indikator Sastra', 'addLabel' => 'Tambah Indikator Sastra', 'idKey' => 'kode_indikator', 'pageKey' => 'pohon_indikator_sastra_page',
-                'routes' => ['store' => 'pohon.indikator-sastra.store', 'update' => 'pohon.indikator-sastra.update', 'destroy' => 'pohon.indikator-sastra.destroy'],
+                'key' => 'indikatorSastra',
+                'label' => 'Indikator Sastra',
+                'addLabel' => 'Tambah Indikator Sastra',
+                'idKey' => 'kode_indikator',
+                'pageKey' => 'pohon_indikator_sastra_page',
+                'routes' => [
+                    'store' => 'pohon.indikator-sastra.store',
+                    'update' => 'pohon.indikator-sastra.update',
+                    'destroy' => 'pohon.indikator-sastra.destroy',
+                ],
                 'columns' => [
                     ['field' => 'kode_indikator', 'headerName' => 'Kode', 'width' => 130],
                     ['field' => 'nama_sastra', 'headerName' => 'Nama Sastra', 'flex' => 1, 'minWidth' => 220],
@@ -287,17 +422,26 @@ class KeloladataController extends Controller
                     ['name' => 'kode_sastra', 'label' => 'Sasaran Strategis', 'type' => 'select', 'options' => $sastraOptions, 'required' => true, 'md' => 8],
                     ['name' => 'nama_indikator', 'label' => 'Nama Indikator', 'required' => true, 'md' => 12],
                     ['name' => 'deskripsi_indikator_sastra', 'label' => 'Deskripsi', 'multiline' => true, 'md' => 12],
-                    ['name' => 'lingkup', 'label' => 'Lingkup', 'type' => 'select', 'options' => $lingkupOptions, 'md' => 4, 'default' => '0'],
+                    ['name' => 'tahun', 'label' => 'Tahun', 'md' => 4],
+                    ['name' => 'lingkup', 'label' => 'Lingkup', 'type' => 'select', 'options' => $lingkupOptions, 'md' => 4, 'default' => $defaultLingkup],
                     ['name' => 'hide', 'label' => 'Status', 'type' => 'select', 'options' => $statusOptions, 'required' => true, 'md' => 4, 'default' => '0'],
                 ],
                 'rows' => $this->pohonIndikatorSastraData($request),
             ],
-            // Saspro Tab
             [
-                'key' => 'saspro', 'label' => 'Sasaran Program', 'addLabel' => 'Tambah Saspro', 'idKey' => 'id_saspro', 'pageKey' => 'pohon_saspro_page',
-                'routes' => ['store' => 'pohon.saspro.store', 'update' => 'pohon.saspro.update', 'destroy' => 'pohon.saspro.destroy'],
+                'key' => 'saspro',
+                'label' => 'Sasaran Program',
+                'addLabel' => 'Tambah Saspro',
+                'idKey' => 'id_saspro',
+                'pageKey' => 'pohon_saspro_page',
+                'routes' => [
+                    'store' => 'pohon.saspro.store',
+                    'update' => 'pohon.saspro.update',
+                    'destroy' => 'pohon.saspro.destroy',
+                ],
                 'columns' => [
                     ['field' => 'id_saspro', 'headerName' => 'Kode', 'width' => 120],
+                    ['field' => 'nama_sastra', 'headerName' => 'Nama Sastra', 'flex' => 1, 'minWidth' => 220],
                     ['field' => 'nama_saspro', 'headerName' => 'Sasaran Program', 'flex' => 1, 'minWidth' => 280],
                 ],
                 'fields' => [
@@ -305,15 +449,23 @@ class KeloladataController extends Controller
                     ['name' => 'id_sastra', 'label' => 'Sasaran Strategis', 'type' => 'select', 'options' => $sastraOptions, 'required' => true, 'md' => 8],
                     ['name' => 'nama_saspro', 'label' => 'Nama Sasaran Program', 'required' => true, 'md' => 12],
                     ['name' => 'deskripsi', 'label' => 'Deskripsi', 'multiline' => true, 'md' => 12],
-                    ['name' => 'lingkup', 'label' => 'Lingkup', 'type' => 'select', 'options' => $lingkupOptions, 'md' => 4, 'default' => '0'],
+                    ['name' => 'tahun', 'label' => 'Tahun', 'md' => 4],
+                    ['name' => 'lingkup', 'label' => 'Lingkup', 'type' => 'select', 'options' => $lingkupOptions, 'md' => 4, 'default' => $defaultLingkup],
                     ['name' => 'hide', 'label' => 'Status', 'type' => 'select', 'options' => $statusOptions, 'required' => true, 'md' => 4, 'default' => '0'],
                 ],
                 'rows' => $this->pohonSasproData($request),
             ],
-            // Indikator Saspro Tab
             [
-                'key' => 'indikatorSaspro', 'label' => 'Indikator Saspro', 'addLabel' => 'Tambah Indikator Saspro', 'idKey' => 'kode_indikator', 'pageKey' => 'pohon_indikator_saspro_page',
-                'routes' => ['store' => 'pohon.indikator-saspro.store', 'update' => 'pohon.indikator-saspro.update', 'destroy' => 'pohon.indikator-saspro.destroy'],
+                'key' => 'indikatorSaspro',
+                'label' => 'Indikator Saspro',
+                'addLabel' => 'Tambah Indikator Saspro',
+                'idKey' => 'kode_indikator',
+                'pageKey' => 'pohon_indikator_saspro_page',
+                'routes' => [
+                    'store' => 'pohon.indikator-saspro.store',
+                    'update' => 'pohon.indikator-saspro.update',
+                    'destroy' => 'pohon.indikator-saspro.destroy',
+                ],
                 'columns' => [
                     ['field' => 'kode_indikator', 'headerName' => 'Kode', 'width' => 130],
                     ['field' => 'nama_saspro', 'headerName' => 'Nama Saspro', 'flex' => 1, 'minWidth' => 220],
@@ -324,7 +476,8 @@ class KeloladataController extends Controller
                     ['name' => 'kode_saspro', 'label' => 'Sasaran Program', 'type' => 'select', 'options' => $sasproOptions, 'required' => true, 'md' => 8],
                     ['name' => 'nama_indikator', 'label' => 'Nama Indikator', 'required' => true, 'md' => 12],
                     ['name' => 'deskripsi_indikator_saspro', 'label' => 'Deskripsi', 'multiline' => true, 'md' => 12],
-                    ['name' => 'lingkup', 'label' => 'Lingkup', 'type' => 'select', 'options' => $lingkupOptions, 'md' => 4, 'default' => '0'],
+                    ['name' => 'tahun', 'label' => 'Tahun', 'md' => 4],
+                    ['name' => 'lingkup', 'label' => 'Lingkup', 'type' => 'select', 'options' => $lingkupOptions, 'md' => 4, 'default' => $defaultLingkup],
                     ['name' => 'hide', 'label' => 'Status', 'type' => 'select', 'options' => $statusOptions, 'required' => true, 'md' => 4, 'default' => '0'],
                 ],
                 'rows' => $this->pohonIndikatorSasproData($request),
@@ -332,18 +485,588 @@ class KeloladataController extends Controller
         ];
     }
 
-    private function lingkupOptions(): array
+    private function pohonSastraData(Request $request)
+    {
+        $search = $this->pohonSearch($request);
+
+        return DB::table('sakip_sastra_new')
+            ->select($this->selectExistingColumns('sakip_sastra_new', [
+                'id_sastra',
+                'nama_sastra',
+                'deskripsi',
+                'link',
+                'lingkup',
+                'target',
+                'tahun',
+                'hide',
+                'urutan',
+            ]))
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('id_sastra', 'like', "%{$search}%")
+                        ->orWhere('nama_sastra', 'like', "%{$search}%");
+                });
+            })
+            ->orderByRaw($this->orderExpression('sakip_sastra_new', 'id_sastra'))
+            ->paginate($this->perPage($request), ['*'], 'pohon_sastra_page')
+            ->withQueryString();
+    }
+
+    private function pohonIndikatorSastraData(Request $request)
+    {
+        $search = $this->pohonSearch($request);
+
+        return DB::table('indikator_sastra as indikator')
+            ->leftJoin('sakip_sastra_new as sastra', 'indikator.kode_sastra', '=', 'sastra.id_sastra')
+            ->select([
+                'indikator.kode_indikator',
+                'indikator.kode_sastra',
+                'indikator.nama_indikator',
+                'indikator.deskripsi_indikator_sastra',
+                'sastra.nama_sastra',
+                ...$this->selectExistingColumns('indikator_sastra', ['link', 'lingkup', 'tahun', 'hide', 'urutan'], 'indikator'),
+            ])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('indikator.kode_indikator', 'like', "%{$search}%")
+                        ->orWhere('indikator.nama_indikator', 'like', "%{$search}%")
+                        ->orWhere('sastra.nama_sastra', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('indikator.kode_sastra')
+            ->orderByRaw($this->orderExpression('indikator_sastra', 'indikator.kode_indikator', 'indikator'))
+            ->paginate($this->perPage($request), ['*'], 'pohon_indikator_sastra_page')
+            ->withQueryString();
+    }
+
+    private function pohonSasproData(Request $request)
+    {
+        $search = $this->pohonSearch($request);
+
+        return DB::table('sakip_saspro_new as saspro')
+            ->leftJoin('sakip_sastra_new as sastra', 'saspro.id_sastra', '=', 'sastra.id_sastra')
+            ->select([
+                'saspro.id_saspro',
+                'saspro.id_sastra',
+                'saspro.nama_saspro',
+                'saspro.deskripsi',
+                'sastra.nama_sastra',
+                ...$this->selectExistingColumns('sakip_saspro_new', ['link', 'lingkup', 'tahun', 'hide', 'urutan'], 'saspro'),
+            ])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('saspro.id_saspro', 'like', "%{$search}%")
+                        ->orWhere('saspro.nama_saspro', 'like', "%{$search}%")
+                        ->orWhere('sastra.nama_sastra', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('saspro.id_sastra')
+            ->orderByRaw($this->orderExpression('sakip_saspro_new', 'saspro.id_saspro', 'saspro'))
+            ->paginate($this->perPage($request), ['*'], 'pohon_saspro_page')
+            ->withQueryString();
+    }
+
+    private function pohonIndikatorSasproData(Request $request)
+    {
+        $search = $this->pohonSearch($request);
+
+        return DB::table('indikator_saspro as indikator')
+            ->leftJoin('sakip_sastra_new as sastra', 'indikator.kode_sastra', '=', 'sastra.id_sastra')
+            ->leftJoin('sakip_saspro_new as saspro', 'indikator.kode_saspro', '=', 'saspro.id_saspro')
+            ->select([
+                'indikator.kode_indikator',
+                'indikator.kode_sastra',
+                'indikator.kode_saspro',
+                'indikator.nama_indikator',
+                'indikator.deskripsi_indikator_saspro',
+                'sastra.nama_sastra',
+                'saspro.nama_saspro',
+                ...$this->selectExistingColumns('indikator_saspro', ['link', 'lingkup', 'tahun', 'hide', 'urutan'], 'indikator'),
+            ])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('indikator.kode_indikator', 'like', "%{$search}%")
+                        ->orWhere('indikator.nama_indikator', 'like', "%{$search}%")
+                        ->orWhere('sastra.nama_sastra', 'like', "%{$search}%")
+                        ->orWhere('saspro.nama_saspro', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('indikator.kode_sastra')
+            ->orderBy('indikator.kode_saspro')
+            ->orderByRaw($this->orderExpression('indikator_saspro', 'indikator.kode_indikator', 'indikator'))
+            ->paginate($this->perPage($request), ['*'], 'pohon_indikator_saspro_page')
+            ->withQueryString();
+    }
+
+    // ---------------------------------------------------------------------
+    // CRUD pohon kinerja
+    // ---------------------------------------------------------------------
+
+    public function pohonSastraStore(Request $request)
+    {
+        $this->ensureAdmin();
+
+        $validated = $this->validatePohonSastra($request, null);
+
+        try {
+            DB::transaction(fn () => sastra_new::create($this->existingPayload('sakip_sastra_new', $validated)));
+
+            return Redirect::back()->with('success', 'Data sasaran strategis berhasil disimpan.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata pohon sastra store failed', ['error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal menyimpan sasaran strategis.');
+        }
+    }
+
+    public function pohonSastraUpdate(Request $request, string $id)
+    {
+        $this->ensureAdmin();
+
+        $sastra = sastra_new::findOrFail($id);
+        $validated = $this->validatePohonSastra($request, $id);
+
+        try {
+            DB::transaction(fn () => $sastra->update($this->existingPayload('sakip_sastra_new', $validated)));
+
+            return Redirect::back()->with('success', 'Data sasaran strategis berhasil diperbarui.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata pohon sastra update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal memperbarui sasaran strategis.');
+        }
+    }
+
+    public function pohonSastraDestroy(string $id)
+    {
+        $this->ensureAdmin();
+
+        try {
+            sastra_new::findOrFail($id)->delete();
+
+            return Redirect::back()->with('success', 'Data sasaran strategis berhasil dihapus.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata pohon sastra delete failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Tidak dapat dihapus karena masih terhubung dengan data lain.');
+        }
+    }
+
+    public function pohonIndikatorSastraStore(Request $request)
+    {
+        $this->ensureAdmin();
+
+        $validated = $this->validatePohonIndikatorSastra($request, null);
+
+        try {
+            DB::transaction(fn () => indikator_sastra_new::create($this->existingPayload('indikator_sastra', $validated)));
+
+            return Redirect::back()->with('success', 'Indikator sasaran strategis berhasil disimpan.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata pohon indikator sastra store failed', ['error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal menyimpan indikator sasaran strategis.');
+        }
+    }
+
+    public function pohonIndikatorSastraUpdate(Request $request, string $id)
+    {
+        $this->ensureAdmin();
+
+        $indikator = indikator_sastra_new::findOrFail($id);
+        $validated = $this->validatePohonIndikatorSastra($request, $id);
+
+        try {
+            DB::transaction(fn () => $indikator->update($this->existingPayload('indikator_sastra', $validated)));
+
+            return Redirect::back()->with('success', 'Indikator sasaran strategis berhasil diperbarui.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata pohon indikator sastra update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal memperbarui indikator sasaran strategis.');
+        }
+    }
+
+    public function pohonIndikatorSastraDestroy(string $id)
+    {
+        $this->ensureAdmin();
+
+        try {
+            indikator_sastra_new::findOrFail($id)->delete();
+
+            return Redirect::back()->with('success', 'Data indikator sasaran strategis berhasil dihapus.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata pohon indikator sastra delete failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Tidak dapat dihapus karena masih terhubung dengan data lain.');
+        }
+    }
+
+    public function pohonSasproStore(Request $request)
+    {
+        $this->ensureAdmin();
+
+        $validated = $this->validatePohonSaspro($request, null);
+
+        try {
+            DB::transaction(fn () => saspro_new::create($this->existingPayload('sakip_saspro_new', $validated)));
+
+            return Redirect::back()->with('success', 'Data sasaran program berhasil disimpan.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata pohon saspro store failed', ['error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal menyimpan sasaran program.');
+        }
+    }
+
+    public function pohonSasproUpdate(Request $request, string $id)
+    {
+        $this->ensureAdmin();
+
+        $saspro = saspro_new::findOrFail($id);
+        $validated = $this->validatePohonSaspro($request, $id);
+
+        try {
+            DB::transaction(fn () => $saspro->update($this->existingPayload('sakip_saspro_new', $validated)));
+
+            return Redirect::back()->with('success', 'Data sasaran program berhasil diperbarui.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata pohon saspro update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal memperbarui sasaran program.');
+        }
+    }
+
+    public function pohonSasproDestroy(string $id)
+    {
+        $this->ensureAdmin();
+
+        try {
+            saspro_new::findOrFail($id)->delete();
+
+            return Redirect::back()->with('success', 'Data sasaran program berhasil dihapus.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata pohon saspro delete failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Tidak dapat dihapus karena masih terhubung dengan data lain.');
+        }
+    }
+
+    public function pohonIndikatorSasproStore(Request $request)
+    {
+        $this->ensureAdmin();
+
+        $validated = $this->validatePohonIndikatorSaspro($request, null);
+
+        try {
+            DB::transaction(fn () => saspro_indikator_new::create($this->existingPayload('indikator_saspro', $validated)));
+
+            return Redirect::back()->with('success', 'Indikator sasaran program berhasil disimpan.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata pohon indikator saspro store failed', ['error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal menyimpan indikator sasaran program.');
+        }
+    }
+
+    public function pohonIndikatorSasproUpdate(Request $request, string $id)
+    {
+        $this->ensureAdmin();
+
+        $indikator = saspro_indikator_new::findOrFail($id);
+        $validated = $this->validatePohonIndikatorSaspro($request, $id);
+
+        try {
+            DB::transaction(fn () => $indikator->update($this->existingPayload('indikator_saspro', $validated)));
+
+            return Redirect::back()->with('success', 'Indikator sasaran program berhasil diperbarui.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata pohon indikator saspro update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Gagal memperbarui indikator sasaran program.');
+        }
+    }
+
+    public function pohonIndikatorSasproDestroy(string $id)
+    {
+        $this->ensureAdmin();
+
+        try {
+            saspro_indikator_new::findOrFail($id)->delete();
+
+            return Redirect::back()->with('success', 'Data indikator sasaran program berhasil dihapus.');
+        } catch (Throwable $e) {
+            Log::error('Keloladata pohon indikator saspro delete failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return Redirect::back()->with('error', 'Tidak dapat dihapus karena masih terhubung dengan data lain.');
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Validasi dan payload
+    // ---------------------------------------------------------------------
+
+    private function validateBidang(Request $request): array
+    {
+        return $request->validate([
+            'id' => ['nullable', 'integer', Rule::exists('sinori_sakip_bidang', 'id')],
+            'bidang_nama' => ['required', 'string', 'max:255'],
+            'bidang_level' => ['required', 'integer', 'min:0'],
+            'bidang_lokasi' => ['required', 'integer', 'between:1,5'],
+            'rumpun' => ['required', 'integer', 'min:0'],
+            'hide' => ['required', 'integer', Rule::in(self::STATUS_VALUES)],
+        ]);
+    }
+
+    private function validateSaspro(Request $request): array
+    {
+        return $request->validate([
+            'link' => ['required', 'integer', Rule::exists('sinori_sakip_bidang', 'id')],
+            'saspro_nama' => ['required', 'string', 'max:255'],
+            'penjelasan_saspro' => ['nullable', 'string'],
+            'saspro_penjelasan' => ['nullable', 'string'],
+            'lingkup' => ['nullable', 'string', Rule::in($this->lingkupValues())],
+            'target' => ['nullable', 'string', 'max:255'],
+            'tahun' => ['nullable', 'string', 'max:10'],
+            'hide' => ['nullable', 'integer', Rule::in(self::STATUS_VALUES)],
+        ]);
+    }
+
+    private function sasproPayload(array $validated, ?Saspro $existing = null): array
     {
         return [
-            ['value' => '0', 'label' => 'Semua Satker'],
-            ['value' => '1', 'label' => 'Pusat'],
-            ['value' => '2', 'label' => 'Kejati'],
-            ['value' => '3', 'label' => 'Kejari'],
-            ['value' => '4', 'label' => 'Cabjari'],
-            ['value' => '5', 'label' => 'Kejati, Kejari'],
-            ['value' => '6', 'label' => 'Kejari, Cabjari'],
-            ['value' => '7', 'label' => 'Kejati, Kejari, Cabjari'],
+            'link' => $validated['link'] ?? $existing?->link,
+            'saspro_nama' => $validated['saspro_nama'] ?? $existing?->saspro_nama,
+            'saspro_penjelasan' => $validated['penjelasan_saspro']
+                ?? $validated['saspro_penjelasan']
+                ?? $existing?->saspro_penjelasan,
+            'lingkup' => $validated['lingkup'] ?? $existing?->lingkup ?? $this->defaultLingkupValue(),
+            'target' => $validated['target'] ?? $existing?->target,
+            'tahun' => $validated['tahun'] ?? $existing?->tahun,
+            'hide' => $validated['hide'] ?? $existing?->hide ?? 0,
         ];
+    }
+
+    private function indikatorPayload(Request $request, ?Indikator $existing = null): array
+    {
+        $isUpdate = $existing !== null;
+
+        $validated = $request->validate([
+            'bidang' => [$isUpdate ? 'nullable' : 'required', 'integer', Rule::exists('sinori_sakip_bidang', 'id')],
+            'lingkup' => ['nullable', 'string', Rule::in($this->lingkupValues())],
+            'id_saspro' => [$isUpdate ? 'nullable' : 'required', 'integer', Rule::exists('sinori_sakip_saspro', 'id')],
+            'indikator_nama' => ['required', 'string', 'max:255'],
+            'indikator_pembilang' => ['nullable', 'string', 'max:255'],
+            'indikator_penyebut' => ['nullable', 'string', 'max:255'],
+            'indikator_penjelasan' => ['nullable', 'string'],
+            'sub_indikator' => ['nullable', 'string'],
+            'tahun' => ['nullable', 'string', 'max:10'],
+            'indikator_penghitungan' => ['nullable', 'string'],
+            'tren' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $bidangId = $validated['bidang'] ?? $existing?->link;
+        $sasproId = $validated['id_saspro'] ?? $existing?->id_saspro;
+
+        if ($bidangId && $sasproId && ! Saspro::whereKey($sasproId)->where('link', $bidangId)->exists()) {
+            throw ValidationException::withMessages([
+                'id_saspro' => 'Saspro yang dipilih tidak sesuai dengan bidang.',
+            ]);
+        }
+
+        return [
+            'link' => $bidangId,
+            'lingkup' => $validated['lingkup'] ?? $existing?->lingkup ?? $this->defaultLingkupValue(),
+            'id_saspro' => $sasproId,
+            'indikator_nama' => $validated['indikator_nama'],
+            'indikator_pembilang' => $validated['indikator_pembilang'] ?? $existing?->indikator_pembilang,
+            'indikator_penyebut' => $validated['indikator_penyebut'] ?? $existing?->indikator_penyebut,
+            'indikator_penjelasan' => $validated['indikator_penjelasan'] ?? $existing?->indikator_penjelasan,
+            'sub_indikator' => $validated['sub_indikator'] ?? $existing?->sub_indikator,
+            'indikator_penghitungan' => $validated['indikator_penghitungan'] ?? $existing?->indikator_penghitungan,
+            'tahun' => $validated['tahun'] ?? $existing?->tahun,
+            'tren' => $validated['tren'] ?? $existing?->tren,
+        ];
+    }
+
+    private function validatePohonSastra(Request $request, ?string $id): array
+    {
+        return $request->validate([
+            'id_sastra' => [
+                $id ? 'nullable' : 'required',
+                'string',
+                'max:255',
+                Rule::unique('sakip_sastra_new', 'id_sastra')->ignore($id, 'id_sastra'),
+            ],
+            'nama_sastra' => ['required', 'string', 'max:255'],
+            'deskripsi' => ['nullable', 'string'],
+            'link' => ['nullable', 'string', 'max:255'],
+            'lingkup' => ['nullable', 'string', Rule::in($this->lingkupValues())],
+            'target' => ['nullable', 'string', 'max:255'],
+            'tahun' => ['nullable', 'string', 'max:10'],
+            'hide' => ['required', 'integer', Rule::in(self::STATUS_VALUES)],
+            'urutan' => ['nullable', 'integer', 'min:0'],
+        ]);
+    }
+
+    private function validatePohonIndikatorSastra(Request $request, ?string $id): array
+    {
+        return $request->validate([
+            'kode_indikator' => [
+                $id ? 'nullable' : 'required',
+                'string',
+                'max:255',
+                Rule::unique('indikator_sastra', 'kode_indikator')->ignore($id, 'kode_indikator'),
+            ],
+            'kode_sastra' => ['required', 'string', Rule::exists('sakip_sastra_new', 'id_sastra')],
+            'nama_indikator' => ['required', 'string', 'max:255'],
+            'deskripsi_indikator_sastra' => ['nullable', 'string'],
+            'link' => ['nullable', 'string', 'max:255'],
+            'lingkup' => ['nullable', 'string', Rule::in($this->lingkupValues())],
+            'tahun' => ['nullable', 'string', 'max:10'],
+            'hide' => ['required', 'integer', Rule::in(self::STATUS_VALUES)],
+            'urutan' => ['nullable', 'integer', 'min:0'],
+        ]);
+    }
+
+    private function validatePohonSaspro(Request $request, ?string $id): array
+    {
+        return $request->validate([
+            'id_saspro' => [
+                $id ? 'nullable' : 'required',
+                'string',
+                'max:255',
+                Rule::unique('sakip_saspro_new', 'id_saspro')->ignore($id, 'id_saspro'),
+            ],
+            'id_sastra' => ['required', 'string', Rule::exists('sakip_sastra_new', 'id_sastra')],
+            'nama_saspro' => ['required', 'string', 'max:255'],
+            'deskripsi' => ['nullable', 'string'],
+            'link' => ['nullable', 'string', 'max:255'],
+            'lingkup' => ['nullable', 'string', Rule::in($this->lingkupValues())],
+            'tahun' => ['nullable', 'string', 'max:10'],
+            'hide' => ['required', 'integer', Rule::in(self::STATUS_VALUES)],
+            'urutan' => ['nullable', 'integer', 'min:0'],
+        ]);
+    }
+
+    private function validatePohonIndikatorSaspro(Request $request, ?string $id): array
+    {
+        $validated = $request->validate([
+            'kode_indikator' => [
+                $id ? 'nullable' : 'required',
+                'string',
+                'max:255',
+                Rule::unique('indikator_saspro', 'kode_indikator')->ignore($id, 'kode_indikator'),
+            ],
+            'kode_saspro' => ['required', 'string', Rule::exists('sakip_saspro_new', 'id_saspro')],
+            'nama_indikator' => ['required', 'string', 'max:255'],
+            'deskripsi_indikator_saspro' => ['nullable', 'string'],
+            'link' => ['nullable', 'string', 'max:255'],
+            'lingkup' => ['nullable', 'string', Rule::in($this->lingkupValues())],
+            'tahun' => ['nullable', 'string', 'max:10'],
+            'hide' => ['required', 'integer', Rule::in(self::STATUS_VALUES)],
+            'urutan' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $validated['kode_sastra'] = DB::table('sakip_saspro_new')
+            ->where('id_saspro', $validated['kode_saspro'])
+            ->value('id_sastra');
+
+        if (! $validated['kode_sastra']) {
+            throw ValidationException::withMessages([
+                'kode_saspro' => 'Saspro yang dipilih tidak memiliki relasi Sastra.',
+            ]);
+        }
+
+        return $validated;
+    }
+
+    // ---------------------------------------------------------------------
+    // Helper umum
+    // ---------------------------------------------------------------------
+
+    private function perPage(Request $request): int
+    {
+        $perPage = (int) $request->input('per_page', 10);
+
+        return in_array($perPage, self::PER_PAGE_OPTIONS, true) ? $perPage : 10;
+    }
+
+    private function search(Request $request): string
+    {
+        return trim((string) $request->input('search', ''));
+    }
+
+    private function pohonSearch(Request $request): string
+    {
+        return trim((string) $request->input('pohon_search', $request->input('search', '')));
+    }
+
+    private function selectExistingColumns(string $table, array $columns, ?string $alias = null): array
+    {
+        return collect($columns)
+            ->map(function ($column) use ($table, $alias) {
+                if (! Schema::hasColumn($table, $column)) {
+                    return DB::raw("NULL as {$column}");
+                }
+
+                return $alias ? "{$alias}.{$column}" : $column;
+            })
+            ->all();
+    }
+
+    private function orderExpression(string $table, string $fallbackColumn, ?string $alias = null): string
+    {
+        if (! Schema::hasColumn($table, 'urutan')) {
+            return $fallbackColumn;
+        }
+
+        $urutanColumn = $alias ? "{$alias}.urutan" : 'urutan';
+
+        return "COALESCE({$urutanColumn}, 999999), {$fallbackColumn}";
+    }
+
+    private function existingPayload(string $table, array $payload): array
+    {
+        return collect($payload)
+            ->filter(fn ($value, $key) => Schema::hasColumn($table, $key))
+            ->all();
+    }
+
+    private function lingkupOptions(): array
+    {
+        return Bidang::select(['rumpun', 'bidang_nama'])
+            ->where('bidang_level', '1')
+            ->where('hide', '0')
+            ->whereNotNull('rumpun')
+            ->get()
+            ->filter(fn ($bidang) => trim((string) $bidang->rumpun) !== '')
+            ->unique(fn ($bidang) => (string) $bidang->rumpun)
+            ->sortBy(fn ($bidang) => str_pad((string) $bidang->rumpun, 10, '0', STR_PAD_LEFT))
+            ->map(fn ($bidang) => [
+                'value' => (string) $bidang->rumpun,
+                'label' => (string) $bidang->bidang_nama,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function lingkupValues(): array
+    {
+        $values = collect($this->lingkupOptions())
+            ->pluck('value')
+            ->map(fn ($value) => (string) $value)
+            ->values()
+            ->all();
+
+        return $values ?: [$this->defaultLingkupValue()];
+    }
+
+    private function defaultLingkupValue(): string
+    {
+        $firstOption = collect($this->lingkupOptions())->first();
+
+        return (string) ($firstOption['value'] ?? '0');
     }
 
     private function statusOptions(): array
@@ -354,251 +1077,9 @@ class KeloladataController extends Controller
         ];
     }
 
-    // =========================================================================
-    // KELOLA INDIKATOR
-    // =========================================================================
-
-    public function storeIndikator(Request $request)
-    {
-        $validated = $request->validate([
-            'bidang'                 => 'required|exists:sinori_sakip_bidang,id',
-            'lingkup'                => 'required|numeric',
-            'id_saspro'              => 'required|exists:sinori_sakip_saspro,id',
-            'indikator_nama'         => 'required|string|max:255',
-            'indikator_pembilang'    => 'required|string|max:255',
-            'indikator_penyebut'     => 'required|string|max:255',
-            'indikator_penjelasan'   => 'required|string',
-            'sub_indikator'          => 'nullable|string',
-            'tahun'                  => 'nullable|string',
-            'indikator_penghitungan' => 'nullable|string',
-            'tren'                   => 'nullable|string',
-        ]);
-
-        try {
-            Indikator::create([
-                'link'                   => $validated['bidang'],
-                'lingkup'                => $validated['lingkup'],
-                'id_saspro'              => $validated['id_saspro'],
-                'indikator_nama'         => $validated['indikator_nama'],
-                'indikator_pembilang'    => $validated['indikator_pembilang'],
-                'indikator_penyebut'     => $validated['indikator_penyebut'],
-                'indikator_penjelasan'   => $validated['indikator_penjelasan'],
-                'sub_indikator'          => $validated['sub_indikator'],
-                'tahun'                  => $validated['tahun'],
-                'indikator_penghitungan' => $validated['indikator_penghitungan'],
-                'tren'                   => $validated['tren'],
-            ]);
-            return Redirect::back()->with('success', 'Data Indikator berhasil disimpan.');
-        } catch (Exception $e) {
-            Log::error('Error storeIndikator: ' . $e->getMessage());
-            return Redirect::back()->with('error', 'Gagal menyimpan data. Pastikan ID unik dan relasi sesuai.');
-        }
-    }
-
-    public function updateIndikator(Request $request, $id)
-    {
-        $validated = $request->validate([
-            'bidang'                 => 'required|exists:sinori_sakip_bidang,id',
-            'lingkup'                => 'required|numeric',
-            'id_saspro'              => 'required|exists:sinori_sakip_saspro,id',
-            'indikator_nama'         => 'required|string|max:255',
-            'indikator_pembilang'    => 'required|string|max:255',
-            'indikator_penyebut'     => 'required|string|max:255',
-            'indikator_penjelasan'   => 'required|string',
-            'sub_indikator'          => 'nullable|string',
-            'tahun'                  => 'nullable|string', 
-            'indikator_penghitungan' => 'nullable|string',
-            'tren'                   => 'nullable|string',
-        ]);
-
-        try {
-            $indikator = Indikator::findOrFail($id);
-            $indikator->update([
-                'link'                   => $validated['bidang'],
-                'lingkup'                => $validated['lingkup'],
-                'id_saspro'              => $validated['id_saspro'],
-                'indikator_nama'         => $validated['indikator_nama'],
-                'indikator_pembilang'    => $validated['indikator_pembilang'],
-                'indikator_penyebut'     => $validated['indikator_penyebut'],
-                'indikator_penjelasan'   => $validated['indikator_penjelasan'],
-                'sub_indikator'          => $validated['sub_indikator'],
-                'tahun'                  => $validated['tahun'], 
-                'indikator_penghitungan' => $validated['indikator_penghitungan'],
-                'tren'                   => $validated['tren'],
-            ]);
-            return Redirect::back()->with('success', 'Data Indikator berhasil diperbarui.');
-        } catch (Exception $e) {
-            Log::error('Error updateIndikator: ' . $e->getMessage());
-            return Redirect::back()->with('error', 'Gagal memperbarui indikator.');
-        }
-    }
-
-    public function deleteIndikator($id)
-    {
-        try {
-            $indikator = Indikator::findOrFail($id);
-            $indikator->delete();
-            return Redirect::back()->with('success', 'Indikator berhasil dihapus.');
-        } catch (Exception $e) {
-            Log::error('Error deleteIndikator: ' . $e->getMessage());
-            return Redirect::back()->with('error', 'Indikator tidak dapat dihapus karena masih terhubung dengan data lain.');
-        }
-    }
-
-    // =========================================================================
-    // KELOLA DATA MASTER POHON KINERJA (SASTRA & SASPRO)
-    // =========================================================================
-
-    public function pohonSastraStore(Request $request)
-    {
-        $this->ensureAdmin();
-
-        $validated = $request->validate([
-            'id_sastra'   => ['required', 'string', 'max:255', Rule::unique('sakip_sastra_new', 'id_sastra')],
-            'nama_sastra' => 'required|string|max:255',
-            'deskripsi'   => 'nullable|string',
-            'link'        => 'nullable|string|max:255',
-            'lingkup'     => 'nullable|string|max:20',
-            'target'      => 'nullable|string|max:255',
-            'tahun'       => 'nullable|string|max:10',
-            'hide'        => 'required|integer|in:0,1',
-            'urutan'      => 'nullable|integer|min:0',
-        ]);
-
-        try {
-            sastra_new::create($this->existingPayload('sakip_sastra_new', $validated));
-            return Redirect::back()->with('success', 'Data sasaran strategis berhasil disimpan.');
-        } catch (Exception $e) {
-            Log::error('Error pohonSastraStore: ' . $e->getMessage());
-            return Redirect::back()->with('error', 'Gagal menyimpan sasaran strategis.');
-        }
-    }
-
-    public function pohonSastraUpdate(Request $request, string $id)
-    {
-        $this->ensureAdmin();
-
-        $validated = $request->validate([
-            'nama_sastra' => 'required|string|max:255',
-            'deskripsi'   => 'nullable|string',
-            'link'        => 'nullable|string|max:255',
-            'lingkup'     => 'nullable|string|max:20',
-            'target'      => 'nullable|string|max:255',
-            'tahun'       => 'nullable|string|max:10',
-            'hide'        => 'required|integer|in:0,1',
-            'urutan'      => 'nullable|integer|min:0',
-        ]);
-
-        try {
-            $sastra = sastra_new::findOrFail($id);
-            $sastra->update($this->existingPayload('sakip_sastra_new', $validated));
-            return Redirect::back()->with('success', 'Data sasaran strategis berhasil diperbarui.');
-        } catch (Exception $e) {
-            Log::error('Error pohonSastraUpdate: ' . $e->getMessage());
-            return Redirect::back()->with('error', 'Gagal memperbarui sasaran strategis.');
-        }
-    }
-
-    public function pohonSastraDestroy(string $id)
-    {
-        $this->ensureAdmin();
-        try {
-            sastra_new::findOrFail($id)->delete();
-            return Redirect::back()->with('success', 'Data sasaran strategis berhasil dihapus.');
-        } catch (Exception $e) {
-            return Redirect::back()->with('error', 'Tidak dapat dihapus karena terikat relasi Foreign Key.');
-        }
-    }
-
-    public function pohonIndikatorSastraStore(Request $request)
-    {
-        $this->ensureAdmin();
-
-        $validated = $request->validate([
-            'kode_indikator'             => ['required', 'string', 'max:255', Rule::unique('indikator_sastra', 'kode_indikator')],
-            'kode_sastra'                => 'required|exists:sakip_sastra_new,id_sastra',
-            'nama_indikator'             => 'required|string|max:255',
-            'deskripsi_indikator_sastra' => 'nullable|string',
-            'lingkup'                    => 'nullable|string|max:20',
-            'hide'                       => 'required|integer|in:0,1',
-        ]);
-
-        try {
-            indikator_sastra_new::create($this->existingPayload('indikator_sastra', $validated));
-            return Redirect::back()->with('success', 'Indikator sasaran strategis berhasil disimpan.');
-        } catch (Exception $e) {
-            Log::error('Error pohonIndikatorSastraStore: ' . $e->getMessage());
-            return Redirect::back()->with('error', 'Gagal menyimpan indikator sasaran strategis.');
-        }
-    }
-
-    public function pohonIndikatorSastraUpdate(Request $request, string $id)
-    {
-        $this->ensureAdmin();
-
-        $validated = $request->validate([
-            'kode_sastra'                => 'required|exists:sakip_sastra_new,id_sastra',
-            'nama_indikator'             => 'required|string|max:255',
-            'deskripsi_indikator_sastra' => 'nullable|string',
-            'lingkup'                    => 'nullable|string|max:20',
-            'hide'                       => 'required|integer|in:0,1',
-        ]);
-
-        try {
-            $indikator = indikator_sastra_new::findOrFail($id);
-            $indikator->update($this->existingPayload('indikator_sastra', $validated));
-            return Redirect::back()->with('success', 'Indikator sasaran strategis berhasil diperbarui.');
-        } catch (Exception $e) {
-            Log::error('Error pohonIndikatorSastraUpdate: ' . $e->getMessage());
-            return Redirect::back()->with('error', 'Gagal memperbarui indikator sasaran strategis.');
-        }
-    }
-
-    public function pohonIndikatorSastraDestroy(string $id)
-    {
-        $this->ensureAdmin();
-        try {
-            indikator_sastra_new::findOrFail($id)->delete();
-            return Redirect::back()->with('success', 'Data indikator sasaran strategis berhasil dihapus.');
-        } catch (Exception $e) {
-            return Redirect::back()->with('error', 'Tidak dapat dihapus karena terikat relasi Target PK.');
-        }
-    }
-
-    // =========================================================================
-    // HELPER METHODS
-    // =========================================================================
-
-    private function perPage(Request $request): int
-    {
-        $perPage = (int) $request->input('per_page', 10);
-        return in_array($perPage, [10, 25, 50], true) ? $perPage : 10;
-    }
-
-    private function selectExistingColumns(string $table, array $columns, ?string $alias = null): array
-    {
-        return collect($columns)->map(function ($column) use ($table, $alias) {
-            return Schema::hasColumn($table, $column) ? ($alias ? "{$alias}.{$column}" : $column) : DB::raw("NULL as {$column}");
-        })->all();
-    }
-
-    private function orderExpression(string $table, string $fallbackColumn, ?string $alias = null): string
-    {
-        if (Schema::hasColumn($table, 'urutan')) {
-            $urutanColumn = $alias ? "{$alias}.urutan" : 'urutan';
-            return "COALESCE({$urutanColumn}, 999999), {$fallbackColumn}";
-        }
-        return $fallbackColumn;
-    }
-
-    private function existingPayload(string $table, array $payload): array
-    {
-        return collect($payload)->filter(fn($val, $key) => Schema::hasColumn($table, $key))->all();
-    }
-
     private function isAdmin(): bool
     {
-        return (int) (auth()->user()?->id_sakip_level ?? session('id_sakip_level', 0)) === 99;
+        return app(SatkerAccessService::class)->isAdmin();
     }
 
     private function ensureAdmin(): void

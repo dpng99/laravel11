@@ -86,10 +86,10 @@ export default function Evaluasi() {
                     <TabPanel value={activeTab} index="lke">
                         {/* 1. Tab LKE */}
                         <Typography paragraph>
-                            Halaman ini digunakan untuk melihat dokumen/bukti dukung sebagaimana tercantum pada Lembar Kerja Evaluasi (LKE) AKIP Tahun 2025...
+                            Halaman ini digunakan untuk melihat dokumen/bukti dukung sebagaimana tercantum pada Lembar Kerja Evaluasi (LKE) AKIP Tahun {tahun}.
                             {/* ... (salin sisa teks paragraf Anda di sini) ... */}
                         </Typography>
-                        <Typography color="error" paragraph>*upload dokumen maks. 4 MB</Typography>
+                        <Typography color="error" paragraph>*upload dokumen maks. 10 MB</Typography>
                         <LkeTabContent lkeGrouped={lkeGrouped} />
                     </TabPanel>
                     

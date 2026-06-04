@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Bidang;
+use App\Services\SatkerAccessService;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Storage;
@@ -17,7 +18,10 @@ class SakipwilController extends Controller
             return redirect()->route('pilih.tahun');
         }
 
-        $id_satker = session('id_satker');
+        $access = app(SatkerAccessService::class);
+        $access->abortUnlessScopedSatkerPage();
+
+        $id_satker = (string) session('id_satker');
         $tahun = session('tahun_terpilih');
         $level = session('id_sakip_level');
         $perPage = $this->perPage($request);
@@ -28,17 +32,9 @@ class SakipwilController extends Controller
             ->orderBy('bidang_level', 'asc')
             ->get();
 
-        $id = DB::table('sinori_login')->where('id_satker', $id_satker)->first();
-
         // 1. Ambil Data User/Satker
-        $baseSatkerQuery = DB::table('sinori_login')->where('id_satker', 'not like', 'was%');
-        if (in_array($id_satker, [999999, 'admin', 'Pengawasan', 'Panev', 'menpanrb'])) {
-            $baseSatkerQuery->whereNotIn('id_satker', [888881, 888882, 'admin', 999999, 'Pengawasan', 'Panev', 'menpanrb'])
-                  ->where('id_satker', 'not like', '00budi')
-                  ->where('id_kejati', 'not like', '87');
-        } else {
-            $baseSatkerQuery->where('id_kejati', $id->id_kejati);
-        }
+        $baseSatkerQuery = $access->scopedSatkerQuery($id_satker, $level)
+            ->select('id_satker', 'satkernama', 'id_kejati', 'id_kejari', 'id_sakip_level');
 
         if ($search !== '') {
             $baseSatkerQuery->where(function ($query) use ($search) {
@@ -176,9 +172,13 @@ class SakipwilController extends Controller
     public function search(Request $request)
     {
         $query = $request->get('query');
-        $results = DB::table('sinori_login') 
-            ->where('satkernama', 'like', "%{$query}%")
-            ->orWhere('id_satker', 'like', "%{$query}%")
+        $results = app(SatkerAccessService::class)
+            ->scopedSatkerQuery()
+            ->select('id_satker', 'satkernama', 'id_kejati', 'id_kejari', 'id_sakip_level')
+            ->where(function ($builder) use ($query) {
+                $builder->where('satkernama', 'like', "%{$query}%")
+                    ->orWhere('id_satker', 'like', "%{$query}%");
+            })
             ->get();
 
         return response()->json($results);
@@ -189,6 +189,8 @@ class SakipwilController extends Controller
      */
     public function viewFile($satker, $filename)
     {
+        app(SatkerAccessService::class)->abortUnlessCanAccessSatker((string) $satker);
+
         $path = 'uploads/repository/' . $satker . '/' . $filename;
         $disk = Storage::disk('google');
 
