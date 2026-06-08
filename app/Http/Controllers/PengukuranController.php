@@ -11,6 +11,16 @@ use App\Models\Bidang;
 use Illuminate\Support\Facades\Auth;
 class PengukuranController extends Controller
 {
+    private const SHARED_USER_FIELDS = [
+        'id_satker',
+        'id_kejati',
+        'id_kejari',
+        'id_level',
+        'id_hidesatker',
+        'satkernama',
+        'id_sakip_level',
+    ];
+
     private function tahunTerpilih()
     {
         return session('tahun_terpilih', date('Y'));
@@ -75,7 +85,7 @@ class PengukuranController extends Controller
             'tahun' => $tahun,
             'bidangs' => $bidangs,
             'auth' => [
-                'user' => Auth::user(),
+                'user' => $this->safeAuthUser(),
                 'satkernama' => $satkernama
             ]
         ]);
@@ -96,6 +106,19 @@ class PengukuranController extends Controller
     //             return response()->json(['error' => 'Gagal mengambil data'], 500);
     //         }
     //     }
+
+    private function safeAuthUser(): ?array
+    {
+        $user = Auth::user();
+
+        if (! $user) {
+            return null;
+        }
+
+        return collect(self::SHARED_USER_FIELDS)
+            ->mapWithKeys(fn ($field) => [$field => $user->{$field} ?? null])
+            ->all();
+    }
     //  public function getDataByBidangAndSubIndikator($id_bidang, $subIndikator)
     //     {
     //         $data = Pengukuran::whereHas('indikator', function ($query) use ($id_bidang) {

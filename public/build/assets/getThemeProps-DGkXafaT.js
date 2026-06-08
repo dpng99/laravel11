@@ -1,0 +1,1 @@
+import{a1 as r}from"./Select-CWR8T-wq.js";import{B as n}from"./app-Dyz61Mo3.js";const a=r();function c(s){const{theme:o,name:e,props:t}=s;return!o||!o.components||!o.components[e]||!o.components[e].defaultProps?t:n(o.components[e].defaultProps,t)}export{c as g,a as s};

@@ -17,6 +17,20 @@ class User extends Authenticatable
 
     protected $hidden = [
         'satkerpass',
+        'satkerkey',
+        'satkerlogindate',
+        'user_fail',
+        'satkerpage',
+        'token',
+        'pejabat_kasatker',
+        'pejabat_bin',
+        'pejabat_intel',
+        'pejabat_pidum',
+        'pejabat_pidsus',
+        'pejabat_datun',
+        'pejabat_militer',
+        'pejabat_pengawasan',
+        'pejabat_aset',
     ];
 
     // Jika Anda menggunakan ID yang bukan auto-increment, tentukan ini

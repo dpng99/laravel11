@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     nodejs \
     npm \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Install PHP Extensions

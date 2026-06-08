@@ -10,16 +10,16 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import LanguageIcon from '@mui/icons-material/Language';
-import SecurityIcon from '@mui/icons-material/Security';
-import SupportAgentIcon from '@mui/icons-material/SupportAgent';
-import CampaignIcon from '@mui/icons-material/Campaign';
 import StorageIcon from '@mui/icons-material/Storage';
 import GavelIcon from '@mui/icons-material/Gavel';
 import QuizIcon from '@mui/icons-material/Quiz';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import AnalyticsIcon from '@mui/icons-material/Analytics';
+import PsychologyIcon from '@mui/icons-material/Psychology';
 import { CloudDownload } from '@mui/icons-material';
 
 export default function AppSidebar({ user, currentYear }) {
@@ -31,17 +31,22 @@ export default function AppSidebar({ user, currentYear }) {
     const tahunAplikasi = currentYear;
     const adminSatkerIds = ['admin', '999999', 'menpanrb', 'Pengawasan', 'Panev'];
     const isAdmin = levelSakip === 99 || adminSatkerIds.includes(rawIdSatker);
-    const canSeeAllSatkers = [99, 1, 0].includes(levelSakip) || adminSatkerIds.includes(rawIdSatker);
-    const canUseScopedSatkerPages = canSeeAllSatkers || [2, 3, 4].includes(levelSakip);
+    const canUseScopedSatkerPages = [99, 2, 1, 0].includes(levelSakip);
 
     // Cek submenu aktif
     const isSubmenuActive = [
         '/kep', '/perencanaan', '/pengukuran', '/pelaporan',
         '/evaluasi', '/evaluasi-akip', '/upload/bukti-dukung'
     ].some(path => url.startsWith(path));
+    const isKewilayahanActive = ['/sakipwil', '/was-lke'].some(path => url.startsWith(path));
+    const isAdministratorActive = [
+        '/admin/dashboard-analitik', '/admin/business-intelligence', '/keloladata', '/diagnostik', '/monitoring', '/admin/download-dokumen'
+    ].some(path => url.startsWith(path));
 
     // State untuk collapse submenu
     const [submenuOpen, setSubmenuOpen] = useState(isSubmenuActive);
+    const [kewilayahanOpen, setKewilayahanOpen] = useState(isKewilayahanActive);
+    const [administratorOpen, setAdministratorOpen] = useState(isAdministratorActive);
 
     // Komponen helper untuk link
     const NavLink = ({ href, icon, text, active }) => (
@@ -94,41 +99,41 @@ export default function AppSidebar({ user, currentYear }) {
                     </>
                 )}
 
-                {/* === Menu Utama Lainnya === */}
+                {/* === Kewilayahan Dropdown === */}
                 {canUseScopedSatkerPages && (
-                    <NavLink href="/sakipwil" icon={<LanguageIcon />} text="SAKIP Wilayah" active={url.startsWith('/sakipwil')} />
-                )}
-                {/* ... (Tambahkan link lain dengan ikon MUI) ... */}
-                {canUseScopedSatkerPages && (
-                    <NavLink href="/was-lke" icon={<VisibilityIcon />} text="Evaluasi Wilayah" active={url.startsWith('/was-lke')} />
-                )}
-
-                {/* === Menu Admin (Level 99) === */}
-                {isAdmin && (
                     <>
-                        <NavLink href="/sakipvalidasi" icon={<SecurityIcon />} text="SAKIP Validasi" active={url.startsWith('/sakipvalidasi')} />
-                        <NavLink href="/chatsupport" icon={<SupportAgentIcon />} text="Chat Support" active={url.startsWith('/chatsupport')} />
-                        <NavLink href="/pengumuman" icon={<CampaignIcon />} text="Pengumuman" active={url.startsWith('/pengumuman')} />
-                        <NavLink href="/keloladata" icon={<StorageIcon />} text="Kelola Data" active={url.startsWith('/keloladata')} />
+                        <ListItemButton onClick={() => setKewilayahanOpen(!kewilayahanOpen)} selected={isKewilayahanActive}>
+                            <ListItemIcon><LanguageIcon /></ListItemIcon>
+                            <ListItemText primary="Kewilayahan" />
+                            {kewilayahanOpen ? <ExpandLess /> : <ExpandMore />}
+                        </ListItemButton>
+                        <Collapse in={kewilayahanOpen} timeout="auto" unmountOnExit>
+                            <List component="div" disablePadding sx={{ pl: 4 }}>
+                                <NavLink href="/sakipwil" icon={<LanguageIcon />} text="SAKIP Wilayah" active={url.startsWith('/sakipwil')} />
+                                <NavLink href="/was-lke" icon={<VisibilityIcon />} text="Evaluasi Wilayah" active={url.startsWith('/was-lke')} />
+                            </List>
+                        </Collapse>
                     </>
                 )}
 
-                {canUseScopedSatkerPages && (
-                    <>
-                        <NavLink href="/monitoring" icon={<BarChartIcon />} text="Monitoring" active={url.startsWith('/monitoring')} />
-                    </>
-                )}
-
+                {/* === Administrator Dropdown === */}
                 {isAdmin && (
                     <>
-                        <NavLink 
-                            href={route('admin.download.index')} 
-                            icon={<CloudDownload />}
-                            active={route().current('admin.download.index')}
-                            text=" Download Arsip Wilayah"
-                        />
-                           
-                        
+                        <ListItemButton onClick={() => setAdministratorOpen(!administratorOpen)} selected={isAdministratorActive}>
+                            <ListItemIcon><AdminPanelSettingsIcon /></ListItemIcon>
+                            <ListItemText primary="Administrator" />
+                            {administratorOpen ? <ExpandLess /> : <ExpandMore />}
+                        </ListItemButton>
+                        <Collapse in={administratorOpen} timeout="auto" unmountOnExit>
+                            <List component="div" disablePadding sx={{ pl: 4 }}>
+                                <NavLink href="/admin/dashboard-analitik" icon={<AnalyticsIcon />} text="Dashboard Analitik" active={url.startsWith('/admin/dashboard-analitik')} />
+                                <NavLink href="/admin/business-intelligence" icon={<PsychologyIcon />} text="Business Intelligence" active={url.startsWith('/admin/business-intelligence')} />
+                                <NavLink href="/keloladata" icon={<StorageIcon />} text="Kelola Data" active={url.startsWith('/keloladata')} />
+                                <NavLink href="/diagnostik" icon={<FactCheckIcon />} text="Pengecekan Sistem" active={url.startsWith('/diagnostik')} />
+                                <NavLink href="/monitoring" icon={<BarChartIcon />} text="Monitoring" active={url.startsWith('/monitoring')} />
+                                <NavLink href="/admin/download-dokumen" icon={<CloudDownload />} text="Download Arsip Wilayah" active={url.startsWith('/admin/download-dokumen')} />
+                            </List>
+                        </Collapse>
                     </>
                 )}
                 

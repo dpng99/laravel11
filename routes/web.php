@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\TahunController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DashboardAnalytic;
 use App\Http\Controllers\KepController;
 use App\Http\Controllers\SakipvalidasiController;
 use App\Http\Controllers\SakipwilController;
@@ -29,6 +30,8 @@ use Inertia\Inertia;
 use Illuminate\Support\Facades\Redirect;
 use App\Http\Controllers\DownloaderFile;
 use App\Http\Controllers\GoogleDriveController;
+use App\Http\Controllers\SystemCheckController;
+use App\Http\Controllers\BusinessIntelligenceController;
 use App\Service\GoogleService;
 /*
 |--------------------------------------------------------------------------
@@ -63,6 +66,8 @@ Route::middleware(['auth'])->group(function () {
 
     // === Dashboard & KEP ===
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/admin/dashboard-analitik', [DashboardAnalytic::class, 'index'])->name('admin.dashboard-analytic');
+    Route::get('/admin/business-intelligence', [BusinessIntelligenceController::class, 'index'])->name('admin.business-intelligence');
     Route::controller(KepController::class)->group(function () {
         Route::get('/kep', 'index')->name('kep');
         Route::post('kep', 'store')->name('kep.store');
@@ -175,6 +180,14 @@ Route::middleware(['auth'])->group(function () {
     // Action Download ZIP (sudah ada sebelumnya)
     Route::get('/download/kejati/{id_kejati}', [DownloaderFile::class, 'downloadKejati'])
         ->name('download.kejati');
+
+    Route::controller(SystemCheckController::class)->group(function () {
+        Route::get('/diagnostik', 'index')->name('diagnostik');
+        Route::get('/diagnostik/api-check', 'apiCheck')->name('diagnostik.api-check');
+        Route::get('/diagnostik/satkers', 'searchSatkers')->name('diagnostik.satkers');
+        Route::get('/diagnostik/document-check', 'documentCheck')->name('diagnostik.document-check');
+    });
+
     // === Kriteria & LKE WAS ===
     Route::controller(KriteriaController::class)->group(function () {
         Route::get('/input-kriteria', 'create')->name('kriteria.create');

@@ -225,6 +225,11 @@ class MonitoringController extends Controller
         return app(SatkerAccessService::class)->canSeeAllSatkers($idSatker, $level);
     }
 
+    private function abortUnlessCanOpenMonitoring(): void
+    {
+        app(SatkerAccessService::class)->abortUnlessScopedSatkerPage();
+    }
+
     private function monitoringSatkerQuery()
     {
         return app(SatkerAccessService::class)->baseSatkerQuery();
@@ -300,6 +305,8 @@ class MonitoringController extends Controller
      */
     public function index(Request $request)
     {
+        $this->abortUnlessCanOpenMonitoring();
+
         if (!session()->has('tahun_terpilih')) {
             return redirect()->route('pilih.tahun');
         }
@@ -385,6 +392,8 @@ class MonitoringController extends Controller
      */
     public function getBidang($idSatker)
     {
+        $this->abortUnlessCanOpenMonitoring();
+
         if (! app(SatkerAccessService::class)->canAccessSatker((string) $idSatker)) {
             return response()->json(['error' => 'Anda tidak memiliki akses ke satker ini'], 403);
         }
@@ -432,6 +441,8 @@ class MonitoringController extends Controller
      */
     public function getSubIndikator2($rumpun, Request $request)
     {
+        $this->abortUnlessCanOpenMonitoring();
+
         if (! session()->has('tahun_terpilih')) {
             return response()->json(['error' => 'Tahun belum dipilih'], 400);
         }
@@ -536,6 +547,8 @@ class MonitoringController extends Controller
 
     public function searchSatker(Request $request)
     {
+        $this->abortUnlessCanOpenMonitoring();
+
         $keyword = $request->query('q', $request->query('term', ''));
         $id_satker = (string) session('id_satker');
         $level = session('id_sakip_level');
@@ -577,6 +590,8 @@ class MonitoringController extends Controller
      */
     public function capaianSasproAll()
     {
+        $this->abortUnlessCanOpenMonitoring();
+
         if (!session()->has('tahun_terpilih')) {
             return response()->json(['error' => 'Tahun belum dipilih'], 400);
         }

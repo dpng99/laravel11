@@ -69,8 +69,7 @@ class SatkerAccessService
     {
         $level = (int) ($level ?? $this->currentLevel());
 
-        return $this->canSeeAllSatkers($idSatker, $level)
-            || in_array($level, [2, 3, 4], true);
+        return in_array($level, [99, 2, 1, 0], true);
     }
 
     public function abortUnlessAdmin(): void

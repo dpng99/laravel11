@@ -10,6 +10,7 @@ use App\Models\Rkakl;
 use App\Models\Dipa;
 use App\Models\Renaksi;
 use App\Models\Kep;
+use App\Services\SatkerAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -29,23 +30,12 @@ class DashboardController extends Controller
         $idSatker = session('id_satker'); // Ambil id_satker dari session
         // $periode = 'P2'; // Periode yang dicek
 
-        if ($tahun == "2024") {
-            $periode = "P1";
-        } elseif ($tahun >= "2025" && $tahun <= "2029") {
-            $periode = "P2";
-        }
+        $periode = ((string) $tahun === "2024") ? "P1" : "P2";
 
         // Lanjutkan dengan logika untuk menampilkan data berdasarkan tahun
         // return view('dashboard', ['tahun' => $tahun]);
 
         $pengumuman = DB::table('sinori_sakip_inbox')->get();
-        $jumlahAturan = DB::table('sinori_sakip_literasi')->count(); // Hitung jumlah aturan
-        // Data untuk chart
-        $id = DB::table('sinori_login')->where('id_satker', $idSatker)->first();
-        $data = DB::table('sinori_login')
-            ->where('id_kejati', $id->id_kejati)
-            ->get();
-
         $renstraTerisi = Renstra::where('id_satker', $idSatker)->where('id_periode', $periode)->exists();
         $ikuTerisi = Iku::where('id_satker', $idSatker)->where('id_periode', $tahun)->exists();
         $renjaTerisi = Renja::where('id_satker', $idSatker)->where('id_periode', $tahun)->exists();
@@ -54,16 +44,6 @@ class DashboardController extends Controller
         $rencanaAksiTerisi = Renaksi::where('id_satker', $idSatker)->where('id_periode', $tahun)->exists();
         $keputusanTimSakipTerisi = Kep::where('id_satker', $idSatker)->where('id_tahun', $tahun)->exists();
 
-       $kepList = DB::table('sinori_sakip_keputusan')
-            ->whereIn('id_satker', $data->pluck('id_satker'))
-            ->where('id_tahun', $tahun)
-            ->pluck('id_filesurat', 'id_satker');
-        // dd($kepList);
-        // Menyelaraskan urutan kepList dengan satker
-        $sortedKepList = $data->pluck('id_satker')->map(function ($id) use ($kepList) {
-            return $kepList[$id] ?? null;
-        });
-        // dd($sortedkepList);
         // Memeriksa tahun dan menentukan id_periode
         if ($tahun == "2024") {
             $id_periode = "P1";
@@ -76,8 +56,6 @@ class DashboardController extends Controller
         // return view('dashboard', compact('pengumuman', 'jumlahAturan', 'data', ['tahun' => $tahun]));
         return Inertia::render('Dashboard', [
             'pengumuman' => $pengumuman,
-            'jumlahAturan' => $jumlahAturan,
-            'data' => $data,
             'tahun' => $tahun,
             'pohonKinerja' => $this->pohonKinerjaData($tahun, $request),
             'pohonPerPageOptions' => [10, 25, 50],
@@ -88,9 +66,117 @@ class DashboardController extends Controller
             'dipaTerisi' => $dipaTerisi,
             'rencanaAksiTerisi' => $rencanaAksiTerisi,
             'keputusanTimSakipTerisi' => $keputusanTimSakipTerisi,
-            'sortedKepList' => $sortedKepList,
+            'documentUploads' => $this->documentUploadData($tahun, $periode),
 
         ]);
+    }
+
+    private function documentUploadData(string $tahun, string $renstraPeriod): array
+    {
+        $access = app(SatkerAccessService::class);
+        $satkers = $access->scopedSatkerQuery()
+            ->select('id_satker', 'satkernama', 'id_kejati', 'id_kejari', 'id_sakip_level')
+            ->orderBy('id_kejati')
+            ->orderBy('id_kejari')
+            ->orderBy('id_satker')
+            ->get()
+            ->keyBy(fn ($satker) => (string) $satker->id_satker);
+
+        $satkerIds = $satkers->keys()->all();
+
+        $documents = [
+            'renstra' => [
+                'label' => 'Renstra',
+                'table' => 'sinori_sakip_renstra',
+                'period_column' => 'id_periode',
+                'period_value' => $renstraPeriod,
+            ],
+            'iku' => [
+                'label' => 'IKU',
+                'table' => 'sinori_sakip_iku',
+                'period_column' => 'id_periode',
+                'period_value' => $tahun,
+            ],
+            'renja' => [
+                'label' => 'Renja',
+                'table' => 'sinori_sakip_renja',
+                'period_column' => 'id_periode',
+                'period_value' => $tahun,
+            ],
+            'rkakl' => [
+                'label' => 'RKAKL',
+                'table' => 'sinori_sakip_rkakl',
+                'period_column' => 'id_periode',
+                'period_value' => $tahun,
+            ],
+            'dipa' => [
+                'label' => 'DIPA',
+                'table' => 'sinori_sakip_dipa',
+                'period_column' => 'id_periode',
+                'period_value' => $tahun,
+            ],
+            'renaksi' => [
+                'label' => 'Rencana Aksi',
+                'table' => 'sinori_sakip_renaksi',
+                'period_column' => 'id_periode',
+                'period_value' => $tahun,
+            ],
+        ];
+
+        return collect($documents)->mapWithKeys(function (array $document, string $key) use ($satkers, $satkerIds) {
+            $rows = collect();
+
+            if (! empty($satkerIds) && Schema::hasTable($document['table'])) {
+                $query = DB::table($document['table'])
+                    ->whereIn('id_satker', $satkerIds)
+                    ->where($document['period_column'], $document['period_value'])
+                    ->whereNotNull('id_filename')
+                    ->where('id_filename', '!=', '');
+
+                if (Schema::hasColumn($document['table'], 'id_perubahan')) {
+                    $query->orderByRaw('CAST(id_perubahan AS UNSIGNED) DESC');
+                }
+
+                if (Schema::hasColumn($document['table'], 'id_tglupload')) {
+                    $query->orderByDesc('id_tglupload');
+                }
+
+                $rows = $query->get();
+            }
+
+            $rowsBySatker = $rows->groupBy(fn ($row) => (string) $row->id_satker);
+
+            $latestUploads = $rowsBySatker->map(function ($satkerRows, string $satkerId) use ($satkers) {
+                $latest = $satkerRows->first();
+                $satker = $satkers->get($satkerId);
+
+                return [
+                    'id_satker' => $satkerId,
+                    'satkernama' => str_replace('_', ' ', (string) ($satker->satkernama ?? '-')),
+                    'id_kejati' => $satker->id_kejati ?? null,
+                    'id_kejari' => $satker->id_kejari ?? null,
+                    'id_sakip_level' => $satker->id_sakip_level ?? null,
+                    'filename' => $latest->id_filename ?? null,
+                    'period' => $latest->id_periode ?? null,
+                    'revision' => $latest->id_perubahan ?? null,
+                    'uploaded_at' => $latest->id_tglupload ?? null,
+                    'document_count' => $satkerRows->count(),
+                ];
+            })->sortBy([
+                ['id_kejati', 'asc'],
+                ['id_kejari', 'asc'],
+                ['id_satker', 'asc'],
+            ])->values();
+
+            return [
+                $key => [
+                    'label' => $document['label'],
+                    'total_satkers' => count($satkerIds),
+                    'uploaded_satkers' => $latestUploads->count(),
+                    'rows' => $latestUploads,
+                ],
+            ];
+        })->all();
     }
 
     private function pohonKinerjaData(string $tahun, Request $request)

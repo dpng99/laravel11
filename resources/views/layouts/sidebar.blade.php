@@ -5,6 +5,9 @@
         $satkernama = session('satkernama', 'Nama Satker');
         $idSatker = session('id_satker', 'ID Satker');
         $levelSakip = session('id_sakip_level', 0);
+        $canUseScopedSatkerPages = in_array((int) $levelSakip, [99, 2, 1, 0], true);
+        $adminSatkerIds = ['admin', '999999', 'menpanrb', 'Pengawasan', 'Panev'];
+        $isAdmin = (int) $levelSakip === 99 || in_array((string) $idSatker, $adminSatkerIds, true);
 
         // Cek apakah submenu harus dibuka
         $submenuActive =
@@ -14,6 +17,13 @@
             request()->is('pelaporan') ||
             request()->is('evaluasi') ||
             request()->is('dataLke');
+        $kewilayahanActive = request()->is('sakipwil') || request()->is('was-lke');
+        $administratorActive =
+            request()->is('admin/dashboard-analitik') ||
+            request()->is('keloladata') ||
+            request()->is('diagnostik') ||
+            request()->is('monitoring') ||
+            request()->is('admin/download-dokumen');
     @endphp
     <div id="user-info">
         <img src="{{ asset('gambar/kejaksaan.png') }}" alt="Profile Picture" class="profile-pic">
@@ -55,43 +65,49 @@
         </div>
     @endif
 
-    @if ($levelSakip == 99 || $levelSakip == 0 || $levelSakip == 2)
-        <a href="{{ route('sakipwil') }}" class="{{ request()->is('sakipwil') ? 'active' : '' }}">
-            <i class="fas fa-globe"></i> <span class="sidebar-text">SAKIP Wilayah</span>
+    @if ($canUseScopedSatkerPages)
+        <a href="#" id="toggle-kewilayahan" class="toggle-btn {{ $kewilayahanActive ? 'active' : '' }}">
+            <i class="fas fa-globe"></i> <span class="sidebar-text">Kewilayahan</span>
+            <i class="fas fa-chevron-right arrow-icon"></i>
         </a>
-         @if ($levelSakip == 99 || Str::startsWith($idSatker, 'menpanrb') || Str::startsWith($idSatker, 'Pengawasan') || Str::startsWith($idSatker, 'Panev'))
-        <a href="{{ route('monitoring') }}" class="{{ request()->is('monitoring') ? 'active' : '' }}">
-            <i class="fas fa-globe"></i> <span class="sidebar-text">Monitoring</span>
+
+        <div class="submenu" id="submenu-kewilayahan" style="display: {{ $kewilayahanActive ? 'block' : 'none' }};">
+            <a href="{{ route('sakipwil') }}" class="{{ request()->is('sakipwil') ? 'active' : '' }}">
+                <i class="fas fa-globe"></i> SAKIP Wilayah
+            </a>
+            <a href="{{ route('lke_was') }}" class="{{ request()->is('was-lke') ? 'active' : '' }}">
+                <i class="far fa-eye"></i> Evaluasi Wilayah
+            </a>
+        </div>
+    @endif
+
+    @if ($isAdmin)
+        <a href="#" id="toggle-administrator" class="toggle-btn {{ $administratorActive ? 'active' : '' }}">
+            <i class="fas fa-user-shield"></i> <span class="sidebar-text">Administrator</span>
+            <i class="fas fa-chevron-right arrow-icon"></i>
         </a>
-        @endif
+
+        <div class="submenu" id="submenu-administrator" style="display: {{ $administratorActive ? 'block' : 'none' }};">
+            <a href="{{ route('admin.dashboard-analytic') }}" class="{{ request()->is('admin/dashboard-analitik') ? 'active' : '' }}">
+                <i class="fas fa-chart-pie"></i> Dashboard Analitik
+            </a>
+            <a href="{{ route('keloladata') }}" class="{{ request()->is('keloladata') ? 'active' : '' }}">
+                <i class="fas fa-database"></i> Kelola Data
+            </a>
+            <a href="{{ route('diagnostik') }}" class="{{ request()->is('diagnostik') ? 'active' : '' }}">
+                <i class="fas fa-search"></i> Pengecekan Sistem
+            </a>
+            <a href="{{ route('monitoring') }}" class="{{ request()->is('monitoring') ? 'active' : '' }}">
+                <i class="fas fa-chart-line"></i> Monitoring
+            </a>
+            <a href="{{ route('admin.download.index') }}" class="{{ request()->is('admin/download-dokumen') ? 'active' : '' }}">
+                <i class="fas fa-download"></i> Download Arsip Wilayah
+            </a>
+        </div>
     @endif
     @php
         use Illuminate\Support\Str;
     @endphp
-    @if ($levelSakip == 99 || $levelSakip == 0)
-    <!--(Str::startsWith(session('satkernama'), 'PENGAWASAN KEJATI'))-->
-    <a href="{{ route('lke_was') }}" class="{{ request()->is('lke_was') ? 'active' : '' }}">
-        <i class="far fa-eye"></i> <span class="sidebar-text">Evaluasi</span>
-    </a>
-    @endif
-
-    @if ($levelSakip == 99 )
-        <a href="{{ route('sakipvalidasi') }}" class="{{ request()->is('sakipvalidasi') ? 'active' : '' }}">
-            <i class="fas fa-check-circle"></i> <span class="sidebar-text">SAKIP Validasi</span>
-        </a>
-        {{-- <a href="{{ route('kepatuhan') }}" class="{{ request()->is('kepatuhan') ? 'active' : '' }}">
-            <i class="fas fa-shield-alt"></i> <span class="sidebar-text">Kepatuhan AKIP</span>
-        </a> --}}
-        <a href="{{ route('chatsupport') }}" class="{{ request()->is('chatsupport') ? 'active' : '' }}">
-            <i class="fas fa-comments"></i> <span class="sidebar-text">Chat Support</span>
-        </a>
-        <a href="{{ route('pengumuman') }}" class="{{ request()->is('pengumuman') ? 'active' : '' }}">
-            <i class="fas fa-envelope"></i> <span class="sidebar-text">Pengumuman</span>
-        </a>
-        <a href="{{ route('keloladata') }}" class="{{ request()->is('keloladata') ? 'active' : '' }}">
-            <i class="fas fa-envelope"></i> <span class="sidebar-text">Kelola Data</span>
-        </a>
-    @endif
     @if ($levelSakip == 99 || $levelSakip == 1|| $levelSakip == 2 || $levelSakip == 3 || $levelSakip == 4  || Str::startsWith($idSatker, 'Pengawasan')  || Str::startsWith($idSatker, 'menpanrb') || Str::startsWith($idSatker, 'Panev'))
         <a href="{{ route('aturan') }}" class="{{ request()->is('aturan') ? 'active' : '' }}">
             <i class="fas fa-gavel"></i> <span class="sidebar-text">Sumber Aturan</span>
@@ -159,6 +175,18 @@
         $('#toggle-submenu').on('click', function (e) {
             e.preventDefault();
             $('#submenu').slideToggle();
+            $(this).find('.arrow-icon').toggleClass('fa-chevron-right fa-chevron-down');
+        });
+
+        $('#toggle-kewilayahan').on('click', function (e) {
+            e.preventDefault();
+            $('#submenu-kewilayahan').slideToggle();
+            $(this).find('.arrow-icon').toggleClass('fa-chevron-right fa-chevron-down');
+        });
+
+        $('#toggle-administrator').on('click', function (e) {
+            e.preventDefault();
+            $('#submenu-administrator').slideToggle();
             $(this).find('.arrow-icon').toggleClass('fa-chevron-right fa-chevron-down');
         });
 

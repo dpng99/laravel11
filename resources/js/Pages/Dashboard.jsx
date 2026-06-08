@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout'; // Layout MUI Anda
+import FileLinkButton from '@/Components/FileLinkButton';
 
 // Import Komponen Material-UI
 import {
@@ -15,6 +16,10 @@ import {
     CardHeader,
     Chip,
     Divider,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     FormControl,
     Grid,
     InputLabel,
@@ -23,27 +28,66 @@ import {
     Paper,
     Select,
     Stack,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
     Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 // Helper komponen untuk Kartu Status Kepatuhan
-function StatusCard({ title, isFilled, textFilled, textNotFilled }) {
+function StatusCard({ title, isFilled, textFilled, textNotFilled, uploadData, onOpen }) {
+    const uploadedSatkers = uploadData?.uploaded_satkers ?? 0;
+    const totalSatkers = uploadData?.total_satkers ?? 0;
+
     return (
         <Paper 
+            component="button"
+            type="button"
+            onClick={onOpen}
             elevation={3} 
             sx={{ 
-                p: 2, 
+                width: '100%',
+                minHeight: 132,
+                p: 2,
+                border: 0,
+                textAlign: 'left',
+                cursor: 'pointer',
                 color: 'white', 
-                backgroundColor: isFilled ? 'success.main' : 'error.main' // Hijau atau Merah
+                backgroundColor: isFilled || uploadedSatkers > 0 ? 'success.main' : 'error.main',
+                transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: 6,
+                },
+                '&:focus-visible': {
+                    outline: '3px solid rgba(25, 118, 210, 0.45)',
+                    outlineOffset: 2,
+                },
             }}
         >
-            <Typography variant="h6" component="h3" sx={{ fontWeight: 'bold' }}>
-                {title}
-            </Typography>
-            <Typography variant="body2">
-                {isFilled ? textFilled : textNotFilled}
-            </Typography>
+            <Stack spacing={1}>
+                <Typography variant="h6" component="h3" sx={{ fontWeight: 'bold' }}>
+                    {title}
+                </Typography>
+                <Typography variant="body2">
+                    {isFilled ? textFilled : textNotFilled}
+                </Typography>
+                {uploadData && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, pt: 0.5 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                            {uploadedSatkers} dari {totalSatkers} satker sudah upload
+                        </Typography>
+                        <Typography variant="caption" sx={{ textDecoration: 'underline', whiteSpace: 'nowrap' }}>
+                            Lihat data
+                        </Typography>
+                    </Box>
+                )}
+            </Stack>
         </Paper>
     );
 }
@@ -198,9 +242,99 @@ function PohonKinerjaSection({ pohonKinerja, perPageOptions }) {
     );
 }
 
+function DocumentUploadDialog({ open, onClose, document }) {
+    const rows = document?.rows || [];
+
+    return (
+        <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
+            <DialogTitle sx={{ fontWeight: 'bold' }}>
+                Data Upload Dokumen {document?.label || ''}
+            </DialogTitle>
+            <DialogContent dividers>
+                <Stack spacing={2}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between">
+                        <Typography variant="body2" color="text.secondary">
+                            Menampilkan satker yang sudah mengunggah dokumen pada tahun/periode terpilih.
+                        </Typography>
+                        <Chip
+                            color={rows.length > 0 ? 'success' : 'default'}
+                            label={`${document?.uploaded_satkers ?? 0} / ${document?.total_satkers ?? 0} satker`}
+                        />
+                    </Stack>
+
+                    {rows.length > 0 ? (
+                        <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 520 }}>
+                            <Table stickyHeader size="small">
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell width={56}>No</TableCell>
+                                        <TableCell>Satker</TableCell>
+                                        <TableCell width={120}>Kode</TableCell>
+                                        <TableCell width={120}>Periode</TableCell>
+                                        <TableCell width={120}>Perubahan</TableCell>
+                                        <TableCell width={180}>Tanggal Upload</TableCell>
+                                        <TableCell>Nama File</TableCell>
+                                        <TableCell width={88} align="center">File</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {rows.map((row, index) => (
+                                        <TableRow key={`${row.id_satker}-${row.filename || index}`} hover>
+                                            <TableCell>{index + 1}</TableCell>
+                                            <TableCell>
+                                                <Typography variant="body2" fontWeight="bold">
+                                                    {row.satkernama || '-'}
+                                                </Typography>
+                                            </TableCell>
+                                            <TableCell>{row.id_satker}</TableCell>
+                                            <TableCell>{row.period || '-'}</TableCell>
+                                            <TableCell>{row.revision ?? '-'}</TableCell>
+                                            <TableCell>{row.uploaded_at || '-'}</TableCell>
+                                            <TableCell>
+                                                <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                                                    {row.filename || '-'}
+                                                </Typography>
+                                                {row.document_count > 1 && (
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {row.document_count} dokumen, menampilkan yang terbaru
+                                                    </Typography>
+                                                )}
+                                            </TableCell>
+                                            <TableCell align="center">
+                                                {row.filename ? (
+                                                    <FileLinkButton satkerId={row.id_satker} fileName={row.filename} variant="icon" tooltip="Lihat dokumen">
+                                                        <OpenInNewIcon fontSize="small" />
+                                                    </FileLinkButton>
+                                                ) : (
+                                                    '-'
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    ) : (
+                        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
+                            <Typography color="text.secondary">
+                                Belum ada satker yang mengunggah dokumen ini.
+                            </Typography>
+                        </Paper>
+                    )}
+                </Stack>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose}>Tutup</Button>
+            </DialogActions>
+        </Dialog>
+    );
+}
+
 export default function Dashboard(props) {
-    const { auth, pengumuman, pohonKinerja, pohonPerPageOptions = [10, 25, 50], renstraTerisi, ikuTerisi, renjaTerisi, rkaklTerisi, dipaTerisi, rencanaAksiTerisi } = props;
+    const { auth, pengumuman, pohonKinerja, pohonPerPageOptions = [10, 25, 50], renstraTerisi, ikuTerisi, renjaTerisi, rkaklTerisi, dipaTerisi, rencanaAksiTerisi, documentUploads = {} } = props;
     const levelSakip = parseInt(auth.user?.id_sakip_level || 0, 10);
+    const [selectedDocumentKey, setSelectedDocumentKey] = useState(null);
+    const selectedDocument = selectedDocumentKey ? documentUploads[selectedDocumentKey] : null;
 
     return (
         <AuthenticatedLayout>
@@ -258,6 +392,8 @@ export default function Dashboard(props) {
                                             isFilled={renstraTerisi}
                                             textFilled="Pengisian Renstra sudah dilakukan"
                                             textNotFilled="Pengisian Renstra belum dilakukan"
+                                            uploadData={documentUploads.renstra}
+                                            onOpen={() => setSelectedDocumentKey('renstra')}
                                         />
                                     </Grid>
                                     <Grid item xs={12} sm={6} md={4}>
@@ -266,6 +402,8 @@ export default function Dashboard(props) {
                                             isFilled={ikuTerisi}
                                             textFilled="Pengisian IKU sudah dilakukan"
                                             textNotFilled="Pengisian IKU belum dilakukan"
+                                            uploadData={documentUploads.iku}
+                                            onOpen={() => setSelectedDocumentKey('iku')}
                                         />
                                     </Grid>
                                     <Grid item xs={12} sm={6} md={4}>
@@ -274,14 +412,18 @@ export default function Dashboard(props) {
                                             isFilled={renjaTerisi}
                                             textFilled="Pengisian Renja sudah dilakukan"
                                             textNotFilled="Pengisian Renja belum dilakukan"
+                                            uploadData={documentUploads.renja}
+                                            onOpen={() => setSelectedDocumentKey('renja')}
                                         />
                                     </Grid>
                                     <Grid item xs={12} sm={6} md={4}>
                                         <StatusCard 
-                                            title="Pengisian LKJIP" 
+                                            title="Pengisian RKAKL" 
                                             isFilled={rkaklTerisi}
-                                            textFilled="Pengisian LKJIP sudah dilakukan"
-                                            textNotFilled="Pengisian LKJIP belum dilakukan"
+                                            textFilled="Pengisian RKAKL sudah dilakukan"
+                                            textNotFilled="Pengisian RKAKL belum dilakukan"
+                                            uploadData={documentUploads.rkakl}
+                                            onOpen={() => setSelectedDocumentKey('rkakl')}
                                         />
                                     </Grid>
                                     <Grid item xs={12} sm={6} md={4}>
@@ -290,6 +432,8 @@ export default function Dashboard(props) {
                                             isFilled={dipaTerisi}
                                             textFilled="Pengisian DIPA sudah dilakukan"
                                             textNotFilled="Pengisian DIPA belum dilakukan"
+                                            uploadData={documentUploads.dipa}
+                                            onOpen={() => setSelectedDocumentKey('dipa')}
                                         />
                                     </Grid>
                                     <Grid item xs={12} sm={6} md={4}>
@@ -298,6 +442,8 @@ export default function Dashboard(props) {
                                             isFilled={rencanaAksiTerisi}
                                             textFilled="Pengisian Rencana Aksi sudah dilakukan"
                                             textNotFilled="Pengisian Rencana Aksi belum dilakukan"
+                                            uploadData={documentUploads.renaksi}
+                                            onOpen={() => setSelectedDocumentKey('renaksi')}
                                         />
                                     </Grid>
                                 </Grid>
@@ -353,6 +499,12 @@ export default function Dashboard(props) {
                 {/* ... (Konten SAKIP & SMART seperti di jawaban saya sebelumnya, menggunakan Grid, Card, CardHeader, Box, Typography) ... */}
 
             </Grid>
+
+            <DocumentUploadDialog
+                open={Boolean(selectedDocument)}
+                document={selectedDocument}
+                onClose={() => setSelectedDocumentKey(null)}
+            />
         </AuthenticatedLayout>
     );
 }
