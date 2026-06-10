@@ -9,6 +9,9 @@ use App\Models\RapatStaffEka;
 use App\Models\Indikator;
 use App\Models\Pengukuran;
 use App\Models\Bidang;
+use App\Services\BusinessIntelligenceService;
+use App\Services\LkjipTemplateService;
+use App\Services\IkssReportDataService;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Validator;
@@ -107,6 +110,58 @@ class PelaporanController extends Controller
             'lkjipFiles' => $lkjipFiles,  
             'rapatStaffEkaFiles' => $rapatStaffEkaFiles,
         ]);
+    }
+
+    public function exportLkjipTemplate(
+        Request $request,
+        LkjipTemplateService $templateService,
+        BusinessIntelligenceService $businessIntelligenceService,
+        IkssReportDataService $reportDataService
+    )
+    {
+        $validated = $request->validate([
+            'triwulan' => 'required|in:TW 1,TW 2,TW 3,TW 4',
+            'tahun' => 'required|integer|min:2000|max:2200',
+        ]);
+
+        $tahun = (int) $this->tahunTerpilih();
+        if ((int) $validated['tahun'] !== $tahun) {
+            return response()->json([
+                'message' => "Tahun dokumen ({$validated['tahun']}) tidak sama dengan tahun aktif ({$tahun}). Muat ulang halaman sebelum membuat dokumen.",
+            ], 409);
+        }
+
+        $idSatker = (string) session('id_satker');
+        $quarter = (int) str_replace('TW ', '', $validated['triwulan']);
+        $rows = $businessIntelligenceService->satkerIkssRows((string) $tahun, $idSatker, $quarter);
+        $level = (int) session('id_sakip_level', $request->user()?->id_sakip_level ?? 0);
+        $reportData = $reportDataService->build($idSatker, (int) $tahun, $quarter, $level);
+
+        if ($rows === []) {
+            return response()->json([
+                'message' => "Data capaian IKSS {$validated['triwulan']} tahun {$tahun} belum tersedia pada Pelaporan.",
+            ], 422);
+        }
+
+        $satker = str_replace('_', ' ', (string) ($request->user()?->satkernama ?? $idSatker));
+
+        Storage::disk('local')->makeDirectory('temp');
+
+        $temporaryPath = storage_path('app/temp/'.uniqid('lkjip_', true).'.docx');
+        $safeTriwulan = str_replace(' ', '_', $validated['triwulan']);
+        $downloadName = "Template_LKJiP_{$idSatker}_{$tahun}_{$safeTriwulan}.docx";
+
+        $templateService->generate($temporaryPath, [
+            'satker' => $satker,
+            'tahun' => $tahun,
+            'triwulan' => $validated['triwulan'],
+            'tanggal_cetak' => now()->locale('id')->translatedFormat('d F Y'),
+            'level' => $level,
+        ], $rows, $reportData);
+
+        return response()
+            ->download($temporaryPath, $downloadName)
+            ->deleteFileAfterSend(true);
     }
 
  // =========================================================================

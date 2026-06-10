@@ -6,6 +6,8 @@ import { Box, Card, CardHeader, CardContent, Tabs, Tab, Typography, Alert, Paper
 // Import komponen tab
 import CapaianKinerjaTab from '@/Components/Pelaporan/CapaianKinerjaTab';
 import FileUploadTab from '@/Components/Pelaporan/FileUploadTab';
+import LkjipTemplateTab from '@/Components/Pelaporan/LkjipTemplateTab';
+import IkssParameterTab from '@/Components/Pelaporan/IkssParameterTab';
 
 // Helper Panel Tab
 function TabPanel(props) {
@@ -31,7 +33,7 @@ export default function Pelaporan() {
         tahun, 
         bidangs, 
         lkjipFiles, 
-        rapatStaffEkaFiles 
+        rapatStaffEkaFiles,
     } = usePage().props;
 
     const levelSakip = parseInt(auth.user?.id_sakip_level || 0, 10);
@@ -91,6 +93,8 @@ export default function Pelaporan() {
                                 {levelSakip === 99 && <Tab label="Capaian Triwulan IV" value="triwulan4" />}
                                 
                                 <Tab label="Laporan Kinerja (LKJiP)" value="lkjip" />
+                                <Tab label="Parameter Pengampu IKSS" value="parameter-ikss" />
+                                <Tab label="Template LKJiP" value="template-lkjip" />
                                 
                                 {/* Tab Capaian Kinerja (Muncul jika tahun != 2024 atau logic lain) */}
                                 <Tab label="Capaian Kinerja" value="capaian" /> 
@@ -117,6 +121,14 @@ export default function Pelaporan() {
                                 fileNamePrefix="LKJiP"
                                 showTriwulanSelect={true}
                             />
+                        </TabPanel>
+
+                        <TabPanel value={activeTab} index="template-lkjip">
+                            <LkjipTemplateTab tahun={tahun} />
+                        </TabPanel>
+
+                        <TabPanel value={activeTab} index="parameter-ikss">
+                            <IkssParameterTab tahun={tahun} levelSakip={levelSakip} />
                         </TabPanel>
 
                         {/* TAB 2: Capaian Kinerja */}

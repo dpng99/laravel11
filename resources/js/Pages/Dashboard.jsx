@@ -38,6 +38,8 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import DescriptionIcon from '@mui/icons-material/Description';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 
 // Helper komponen untuk Kartu Status Kepatuhan
 function StatusCard({ title, isFilled, textFilled, textNotFilled, uploadData, onOpen }) {
@@ -330,8 +332,110 @@ function DocumentUploadDialog({ open, onClose, document }) {
     );
 }
 
+function SakipDocumentsPanel({ documents = [], idSatker, tahun }) {
+    const availableCount = documents.filter((document) => document.available).length;
+
+    return (
+        <Card
+            elevation={3}
+            sx={{
+                position: { lg: 'sticky' },
+                top: { lg: 88 },
+                overflow: 'hidden',
+            }}
+        >
+            <CardHeader
+                avatar={<DescriptionIcon />}
+                title="Dokumen SAKIP"
+                subheader={`Akses cepat dokumen tahun ${tahun}`}
+                titleTypographyProps={{ variant: 'h5', fontWeight: 'bold' }}
+                sx={{
+                    backgroundColor: 'primary.main',
+                    color: 'white',
+                    '& .MuiCardHeader-subheader': { color: 'rgba(255,255,255,0.85)' },
+                }}
+            />
+            <CardContent sx={{ maxHeight: { lg: 'calc(100vh - 132px)' }, overflowY: { lg: 'auto' } }}>
+                <Paper variant="outlined" sx={{ p: 1.5, mb: 2, backgroundColor: '#fffaf0' }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                        <Box>
+                            <Typography variant="caption" color="text.secondary">
+                                Dokumen tersedia
+                            </Typography>
+                            <Typography variant="h5" fontWeight="bold">
+                                {availableCount} / {documents.length}
+                            </Typography>
+                        </Box>
+                        <Chip
+                            color={availableCount === documents.length ? 'success' : 'warning'}
+                            label={availableCount === documents.length ? 'Lengkap' : 'Perlu dilengkapi'}
+                            size="small"
+                        />
+                    </Stack>
+                </Paper>
+
+                <Stack spacing={1.25}>
+                    {documents.map((document) => (
+                        <Paper key={document.key} variant="outlined" sx={{ p: 1.5 }}>
+                            <Stack spacing={1}>
+                                <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="flex-start">
+                                    <Box sx={{ minWidth: 0 }}>
+                                        <Typography variant="subtitle2" fontWeight="bold">
+                                            {document.label}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" display="block">
+                                            {document.triwulan || `Periode ${document.period}`}
+                                            {document.revision !== null ? `, versi ${document.revision}` : ''}
+                                        </Typography>
+                                    </Box>
+                                    <Chip
+                                        size="small"
+                                        color={document.available ? 'success' : 'default'}
+                                        label={document.available ? 'Tersedia' : 'Belum ada'}
+                                    />
+                                </Stack>
+
+                                {document.available && (
+                                    <>
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                            sx={{ wordBreak: 'break-word' }}
+                                        >
+                                            {document.filename}
+                                        </Typography>
+                                        {document.uploaded_at && (
+                                            <Typography variant="caption" color="text.secondary">
+                                                Diunggah: {document.uploaded_at}
+                                            </Typography>
+                                        )}
+                                        <FileLinkButton satkerId={idSatker} fileName={document.filename}>
+                                            Buka dokumen
+                                        </FileLinkButton>
+                                    </>
+                                )}
+
+                                <Button
+                                    component={Link}
+                                    href={document.manage_url}
+                                    size="small"
+                                    variant={document.available ? 'text' : 'outlined'}
+                                    startIcon={<FolderOpenIcon />}
+                                    sx={{ alignSelf: 'flex-start' }}
+                                >
+                                    {document.available ? 'Kelola dokumen' : 'Lengkapi dokumen'}
+                                </Button>
+                            </Stack>
+                        </Paper>
+                    ))}
+                </Stack>
+            </CardContent>
+        </Card>
+    );
+}
+
 export default function Dashboard(props) {
-    const { auth, pengumuman, pohonKinerja, pohonPerPageOptions = [10, 25, 50], renstraTerisi, ikuTerisi, renjaTerisi, rkaklTerisi, dipaTerisi, rencanaAksiTerisi, documentUploads = {} } = props;
+    const { auth, tahun, pengumuman, pohonKinerja, pohonPerPageOptions = [10, 25, 50], renstraTerisi, ikuTerisi, renjaTerisi, rkaklTerisi, dipaTerisi, rencanaAksiTerisi, documentUploads = {}, sakipDocuments = [] } = props;
     const levelSakip = parseInt(auth.user?.id_sakip_level || 0, 10);
     const [selectedDocumentKey, setSelectedDocumentKey] = useState(null);
     const selectedDocument = selectedDocumentKey ? documentUploads[selectedDocumentKey] : null;
@@ -340,164 +444,112 @@ export default function Dashboard(props) {
         <AuthenticatedLayout>
             <Head title="Dashboard" />
             
-            <Grid container spacing={3}>
-                
-                {/* 1. Pengumuman */}
-                <Grid item xs={12}>
-                    <AnimatedCard index={0}>
-                        <CardHeader
-                            title="Pengumuman"
-                            titleTypographyProps={{ variant: 'h5', align: 'center', fontWeight: 'bold' }}
-                            sx={{ backgroundColor: 'primary.main', color: 'white' }}
-                        />
-                        <CardContent>
-                            {pengumuman.length > 0 ? (
-                                pengumuman.map((item, idx) => (
-                                    <Paper key={idx} elevation={1} sx={{ p: 2, mb: 2 }}>
-                                        <Typography variant="h6" sx={{ color: 'red', fontWeight: 'bold' }}>
-                                            {item.judul}
-                                        </Typography>
-                                        <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
-                                            {item.isi}
-                                        </Typography>
-                                    </Paper>
-                                ))
-                            ) : (
-                                <Typography align="center" color="text.secondary">
-                                    Tidak ada pengumuman.
-                                </Typography>
-                            )}
-                        </CardContent>
-                    </AnimatedCard>
-                </Grid>
-
-                <Grid item xs={12}>
-                    <PohonKinerjaSection pohonKinerja={pohonKinerja} perPageOptions={pohonPerPageOptions} />
-                </Grid>
-
-                {/* 2. Kepatuhan (Conditional) */}
-                {levelSakip !== 0 && (
-                    <Grid item xs={12}>
-                        <AnimatedCard index={1}>
+            <Grid container spacing={3} alignItems="flex-start">
+                <Grid item xs={12} lg={8}>
+                    <Stack spacing={3}>
+                        <AnimatedCard index={0}>
                             <CardHeader
-                                title="Kepatuhan"
+                                title="Pengumuman"
                                 titleTypographyProps={{ variant: 'h5', align: 'center', fontWeight: 'bold' }}
                                 sx={{ backgroundColor: 'primary.main', color: 'white' }}
                             />
                             <CardContent>
-                                <Grid container spacing={2}>
-                                    <Grid item xs={12} sm={6} md={4}>
-                                        <StatusCard 
-                                            title="Pengisian Renstra" 
-                                            isFilled={renstraTerisi}
-                                            textFilled="Pengisian Renstra sudah dilakukan"
-                                            textNotFilled="Pengisian Renstra belum dilakukan"
-                                            uploadData={documentUploads.renstra}
-                                            onOpen={() => setSelectedDocumentKey('renstra')}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6} md={4}>
-                                        <StatusCard 
-                                            title="Pengisian IKU" 
-                                            isFilled={ikuTerisi}
-                                            textFilled="Pengisian IKU sudah dilakukan"
-                                            textNotFilled="Pengisian IKU belum dilakukan"
-                                            uploadData={documentUploads.iku}
-                                            onOpen={() => setSelectedDocumentKey('iku')}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6} md={4}>
-                                        <StatusCard 
-                                            title="Pengisian Renja" 
-                                            isFilled={renjaTerisi}
-                                            textFilled="Pengisian Renja sudah dilakukan"
-                                            textNotFilled="Pengisian Renja belum dilakukan"
-                                            uploadData={documentUploads.renja}
-                                            onOpen={() => setSelectedDocumentKey('renja')}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6} md={4}>
-                                        <StatusCard 
-                                            title="Pengisian RKAKL" 
-                                            isFilled={rkaklTerisi}
-                                            textFilled="Pengisian RKAKL sudah dilakukan"
-                                            textNotFilled="Pengisian RKAKL belum dilakukan"
-                                            uploadData={documentUploads.rkakl}
-                                            onOpen={() => setSelectedDocumentKey('rkakl')}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6} md={4}>
-                                        <StatusCard 
-                                            title="Pengisian DIPA" 
-                                            isFilled={dipaTerisi}
-                                            textFilled="Pengisian DIPA sudah dilakukan"
-                                            textNotFilled="Pengisian DIPA belum dilakukan"
-                                            uploadData={documentUploads.dipa}
-                                            onOpen={() => setSelectedDocumentKey('dipa')}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6} md={4}>
-                                        <StatusCard 
-                                            title="Pengisian Rencana Aksi" 
-                                            isFilled={rencanaAksiTerisi}
-                                            textFilled="Pengisian Rencana Aksi sudah dilakukan"
-                                            textNotFilled="Pengisian Rencana Aksi belum dilakukan"
-                                            uploadData={documentUploads.renaksi}
-                                            onOpen={() => setSelectedDocumentKey('renaksi')}
-                                        />
-                                    </Grid>
-                                </Grid>
+                                {pengumuman.length > 0 ? (
+                                    pengumuman.map((item, idx) => (
+                                        <Paper key={idx} elevation={1} sx={{ p: 2, mb: 2 }}>
+                                            <Typography variant="h6" sx={{ color: 'red', fontWeight: 'bold' }}>
+                                                {item.judul}
+                                            </Typography>
+                                            <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
+                                                {item.isi}
+                                            </Typography>
+                                        </Paper>
+                                    ))
+                                ) : (
+                                    <Typography align="center" color="text.secondary">
+                                        Tidak ada pengumuman.
+                                    </Typography>
+                                )}
                             </CardContent>
                         </AnimatedCard>
-                    </Grid>
-                )}
 
-                {/* 3. Action Cards (Aturan & FAQ) */}
-                <Grid item xs={12} md={6}>
-                    <AnimatedCard index={2}>
-                        <CardContent>
-                            <Typography variant="h5" component="h2" sx={{ fontWeight: 'bold' }}>
-                                Sumber Aturan
-                            </Typography>
-                            <Typography color="text.secondary" sx={{ my: 1 }}>
-                                Lihat sumber aturan dan referensi hukum yang relevan.
-                            </Typography>
-                            <Button 
-                                component={Link}
-                                href="/aturan" 
-                                variant="contained" 
-                                color="primary"
-                            >
-                                Lihat Sumber Aturan
-                            </Button>
-                        </CardContent>
-                    </AnimatedCard>
+                        <PohonKinerjaSection pohonKinerja={pohonKinerja} perPageOptions={pohonPerPageOptions} />
+
+                        {levelSakip !== 0 && (
+                            <AnimatedCard index={1}>
+                                <CardHeader
+                                    title="Kepatuhan"
+                                    titleTypographyProps={{ variant: 'h5', align: 'center', fontWeight: 'bold' }}
+                                    sx={{ backgroundColor: 'primary.main', color: 'white' }}
+                                />
+                                <CardContent>
+                                    <Grid container spacing={2}>
+                                        {[
+                                            ['renstra', 'Pengisian Renstra', renstraTerisi],
+                                            ['iku', 'Pengisian IKU', ikuTerisi],
+                                            ['renja', 'Pengisian Renja', renjaTerisi],
+                                            ['rkakl', 'Pengisian RKAKL', rkaklTerisi],
+                                            ['dipa', 'Pengisian DIPA', dipaTerisi],
+                                            ['renaksi', 'Pengisian Rencana Aksi', rencanaAksiTerisi],
+                                        ].map(([key, title, isFilled]) => (
+                                            <Grid item xs={12} md={6} key={key}>
+                                                <StatusCard
+                                                    title={title}
+                                                    isFilled={isFilled}
+                                                    textFilled={`${title} sudah dilakukan`}
+                                                    textNotFilled={`${title} belum dilakukan`}
+                                                    uploadData={documentUploads[key]}
+                                                    onOpen={() => setSelectedDocumentKey(key)}
+                                                />
+                                            </Grid>
+                                        ))}
+                                    </Grid>
+                                </CardContent>
+                            </AnimatedCard>
+                        )}
+
+                        <Grid container spacing={2}>
+                            <Grid item xs={12} md={6}>
+                                <AnimatedCard index={2}>
+                                    <CardContent>
+                                        <Typography variant="h5" component="h2" sx={{ fontWeight: 'bold' }}>
+                                            Sumber Aturan
+                                        </Typography>
+                                        <Typography color="text.secondary" sx={{ my: 1 }}>
+                                            Lihat sumber aturan dan referensi hukum yang relevan.
+                                        </Typography>
+                                        <Button component={Link} href="/aturan" variant="contained">
+                                            Lihat Sumber Aturan
+                                        </Button>
+                                    </CardContent>
+                                </AnimatedCard>
+                            </Grid>
+                            <Grid item xs={12} md={6}>
+                                <AnimatedCard index={3}>
+                                    <CardContent>
+                                        <Typography variant="h5" component="h2" sx={{ fontWeight: 'bold' }}>
+                                            FAQ
+                                        </Typography>
+                                        <Typography color="text.secondary" sx={{ my: 1 }}>
+                                            Lihat pertanyaan yang sering diajukan tentang sistem ini.
+                                        </Typography>
+                                        <Button component={Link} href="/faq" variant="contained">
+                                            Lihat FAQ
+                                        </Button>
+                                    </CardContent>
+                                </AnimatedCard>
+                            </Grid>
+                        </Grid>
+                    </Stack>
                 </Grid>
-                
-                <Grid item xs={12} md={6}>
-                    <AnimatedCard index={3}>
-                        <CardContent>
-                            <Typography variant="h5" component="h2" sx={{ fontWeight: 'bold' }}>
-                                FAQ
-                            </Typography>
-                            <Typography color="text.secondary" sx={{ my: 1 }}>
-                                Lihat pertanyaan yang sering diajukan tentang sistem ini.
-                            </Typography>
-                            <Button 
-                                component={Link} 
-                                href="/faq" 
-                                variant="contained" 
-                                color="primary"
-                            >
-                                Lihat FAQ
-                            </Button>
-                        </CardContent>
-                    </AnimatedCard>
+
+                <Grid item xs={12} lg={4}>
+                    <SakipDocumentsPanel
+                        documents={sakipDocuments}
+                        idSatker={auth.user?.id_satker}
+                        tahun={tahun}
+                    />
                 </Grid>
-
-                {/* 4. Image & Text Cards (SAKIP & SMART) */}
-                {/* ... (Konten SAKIP & SMART seperti di jawaban saya sebelumnya, menggunakan Grid, Card, CardHeader, Box, Typography) ... */}
-
             </Grid>
 
             <DocumentUploadDialog

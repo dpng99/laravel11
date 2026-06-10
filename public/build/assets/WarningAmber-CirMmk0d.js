@@ -1,0 +1,1 @@
+import{j as o}from"./app-BpGXAL06.js";import{c as r}from"./Select-Bqm4NUIV.js";const a=r([o.jsx("path",{d:"M12 5.99 19.53 19H4.47zM12 2 1 21h22z"},"0"),o.jsx("path",{d:"M13 16h-2v2h2zm0-6h-2v5h2z"},"1")]);export{a as W};

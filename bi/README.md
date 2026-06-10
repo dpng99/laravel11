@@ -6,10 +6,11 @@ secara langsung dan hanya menerima snapshot JSON tanpa kredensial.
 
 Analisis yang dihasilkan:
 
-- tren kelengkapan nasional empat tahun;
-- skor dan tingkat risiko satker;
+- tren capaian terhadap target nasional empat tahun;
+- skor dan tingkat risiko satker berdasarkan SS/IKSS;
 - performa serta anomali wilayah;
-- peluang perbaikan per jenis dokumen;
+- analisis target, capaian, dan capaian terhadap target per IKSS;
+- performa Sasaran Strategis (SS);
 - insight dan rekomendasi tindak lanjut otomatis.
 
 ## Menjalankan

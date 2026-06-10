@@ -67,8 +67,108 @@ class DashboardController extends Controller
             'rencanaAksiTerisi' => $rencanaAksiTerisi,
             'keputusanTimSakipTerisi' => $keputusanTimSakipTerisi,
             'documentUploads' => $this->documentUploadData($tahun, $periode),
+            'sakipDocuments' => $this->sakipDocuments($idSatker, $tahun, $periode),
 
         ]);
+    }
+
+    private function sakipDocuments(mixed $idSatker, string $tahun, string $renstraPeriod): array
+    {
+        $documents = [
+            [
+                'key' => 'renstra',
+                'label' => 'Renstra',
+                'table' => 'sinori_sakip_renstra',
+                'period' => $renstraPeriod,
+                'manage_url' => '/perencanaan',
+            ],
+            [
+                'key' => 'iku',
+                'label' => 'Indikator Kinerja Utama (IKU)',
+                'table' => 'sinori_sakip_iku',
+                'period' => $tahun,
+                'manage_url' => '/perencanaan',
+            ],
+            [
+                'key' => 'renja',
+                'label' => 'Rencana Kerja (Renja)',
+                'table' => 'sinori_sakip_renja',
+                'period' => $tahun,
+                'manage_url' => '/perencanaan',
+            ],
+            [
+                'key' => 'rkakl',
+                'label' => 'RKAKL',
+                'table' => 'sinori_sakip_rkakl',
+                'period' => $tahun,
+                'manage_url' => '/perencanaan',
+            ],
+            [
+                'key' => 'dipa',
+                'label' => 'DIPA',
+                'table' => 'sinori_sakip_dipa',
+                'period' => $tahun,
+                'manage_url' => '/perencanaan',
+            ],
+            [
+                'key' => 'renaksi',
+                'label' => 'Rencana Aksi',
+                'table' => 'sinori_sakip_renaksi',
+                'period' => $tahun,
+                'manage_url' => '/perencanaan',
+            ],
+            [
+                'key' => 'pk',
+                'label' => 'Perjanjian Kinerja',
+                'table' => 'pk',
+                'period' => $tahun,
+                'manage_url' => '/perencanaan',
+            ],
+            [
+                'key' => 'lkjip',
+                'label' => 'Laporan Kinerja (LKJiP)',
+                'table' => 'sinori_sakip_lakip',
+                'period' => $tahun,
+                'manage_url' => '/pelaporan',
+            ],
+        ];
+
+        return collect($documents)
+            ->map(function (array $document) use ($idSatker) {
+                $latest = null;
+
+                if (Schema::hasTable($document['table'])) {
+                    $query = DB::table($document['table'])
+                        ->where('id_satker', $idSatker)
+                        ->where('id_periode', $document['period'])
+                        ->whereNotNull('id_filename')
+                        ->where('id_filename', '!=', '');
+
+                    if (Schema::hasColumn($document['table'], 'id')) {
+                        $query->orderByDesc('id');
+                    }
+
+                    if (Schema::hasColumn($document['table'], 'id_perubahan')) {
+                        $query->orderByRaw('CAST(id_perubahan AS UNSIGNED) DESC');
+                    }
+
+                    $latest = $query->first();
+                }
+
+                return [
+                    'key' => $document['key'],
+                    'label' => $document['label'],
+                    'manage_url' => $document['manage_url'],
+                    'available' => $latest !== null,
+                    'filename' => $latest->id_filename ?? null,
+                    'period' => $latest->id_periode ?? $document['period'],
+                    'revision' => $latest->id_perubahan ?? null,
+                    'uploaded_at' => $latest->id_tglupload ?? null,
+                    'triwulan' => $latest->id_triwulan ?? null,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     private function documentUploadData(string $tahun, string $renstraPeriod): array

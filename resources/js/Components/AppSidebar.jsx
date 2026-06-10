@@ -32,15 +32,17 @@ export default function AppSidebar({ user, currentYear }) {
     const adminSatkerIds = ['admin', '999999', 'menpanrb', 'Pengawasan', 'Panev'];
     const isAdmin = levelSakip === 99 || adminSatkerIds.includes(rawIdSatker);
     const canUseScopedSatkerPages = [99, 2, 1, 0].includes(levelSakip);
+    const canUseSpipInput = [1, 2].includes(levelSakip)
+        && !['888881', '888882', '999999', 'admin', 'Pengawasan', 'Panev', 'menpanrb'].includes(rawIdSatker);
 
     // Cek submenu aktif
     const isSubmenuActive = [
         '/kep', '/perencanaan', '/pengukuran', '/pelaporan',
-        '/evaluasi', '/evaluasi-akip', '/upload/bukti-dukung'
+        '/evaluasi', '/evaluasi-akip', '/upload/bukti-dukung', '/spip'
     ].some(path => url.startsWith(path));
     const isKewilayahanActive = ['/sakipwil', '/was-lke'].some(path => url.startsWith(path));
     const isAdministratorActive = [
-        '/admin/dashboard-analitik', '/admin/business-intelligence', '/keloladata', '/diagnostik', '/monitoring', '/admin/download-dokumen'
+        '/admin/dashboard-analitik', '/admin/business-intelligence', '/admin/spip', '/keloladata', '/diagnostik', '/monitoring', '/admin/download-dokumen'
     ].some(path => url.startsWith(path));
 
     // State untuk collapse submenu
@@ -93,6 +95,9 @@ export default function AppSidebar({ user, currentYear }) {
                                 )}
                                 <NavLink href="/pelaporan" icon={<AssessmentIcon />} text="Pelaporan" active={url.startsWith('/pelaporan')} />
                                 <NavLink href="/evaluasi" icon={<FactCheckIcon />} text="Evaluasi" active={url.startsWith('/evaluasi')} />
+                                {canUseSpipInput && (
+                                    <NavLink href="/spip" icon={<FactCheckIcon />} text="SPIP" active={url.startsWith('/spip')} />
+                                )}
                                 {/* ... tambahkan item submenu lainnya ... */}
                             </List>
                         </Collapse>
@@ -128,6 +133,7 @@ export default function AppSidebar({ user, currentYear }) {
                             <List component="div" disablePadding sx={{ pl: 4 }}>
                                 <NavLink href="/admin/dashboard-analitik" icon={<AnalyticsIcon />} text="Dashboard Analitik" active={url.startsWith('/admin/dashboard-analitik')} />
                                 <NavLink href="/admin/business-intelligence" icon={<PsychologyIcon />} text="Business Intelligence" active={url.startsWith('/admin/business-intelligence')} />
+                                <NavLink href="/admin/spip" icon={<FactCheckIcon />} text="Admin SPIP" active={url.startsWith('/admin/spip')} />
                                 <NavLink href="/keloladata" icon={<StorageIcon />} text="Kelola Data" active={url.startsWith('/keloladata')} />
                                 <NavLink href="/diagnostik" icon={<FactCheckIcon />} text="Pengecekan Sistem" active={url.startsWith('/diagnostik')} />
                                 <NavLink href="/monitoring" icon={<BarChartIcon />} text="Monitoring" active={url.startsWith('/monitoring')} />

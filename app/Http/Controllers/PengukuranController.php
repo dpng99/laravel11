@@ -9,6 +9,9 @@ use Inertia\Inertia;
 use Illuminate\Support\Facades\Redirect;
 use App\Models\Bidang;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
+use App\Services\IkssLegacyImportService;
+use Throwable;
 class PengukuranController extends Controller
 {
     private const SHARED_USER_FIELDS = [
@@ -244,6 +247,8 @@ class PengukuranController extends Controller
             }
         }
 
+        $this->syncLegacyIkss((int) $tahun, (string) $id_satker, [1, 2, 3, 4]);
+
         return Redirect::back()->with('success', 'Data pengukuran berhasil disimpan atau diperbarui.');
     }
 
@@ -380,6 +385,14 @@ class PengukuranController extends Controller
         $pengukuran->{$validated['field']} = $validated['value'];
         $pengukuran->save();
 
+        if (in_array($validated['field'], ['perhitungan', 'capaian', 'sisa_tahun_lalu'], true)) {
+            $this->syncLegacyIkss(
+                (int) $this->tahunTerpilih(),
+                (string) session('id_satker'),
+                [(int) ceil($validated['bulan'] / 3)]
+            );
+        }
+
         return response()->json(['success' => true]);
     }
 
@@ -387,6 +400,19 @@ class PengukuranController extends Controller
     {
         return $this->updateInline($request);
     }
-    
-}
 
+    private function syncLegacyIkss(int $year, string $satkerId, array $quarters): void
+    {
+        if (! Schema::hasTable('ikss_parameters')) {
+            return;
+        }
+
+        try {
+            foreach (array_unique($quarters) as $quarter) {
+                app(IkssLegacyImportService::class)->import($year, (int) $quarter, [$satkerId]);
+            }
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+    }
+}

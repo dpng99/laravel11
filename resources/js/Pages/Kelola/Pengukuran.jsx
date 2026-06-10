@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { Head, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Card, CardHeader, CardContent, Grid, Button, Box, Typography, Paper } from '@mui/material';
+import { Card, CardHeader, CardContent, Grid, Button, Box, Typography, Paper, Tab, Tabs } from '@mui/material';
 import IndikatorContent from '@/Components/Pengukuran/IndikatorContent';
+import IkssParameterTab from '@/Components/Pelaporan/IkssParameterTab';
 
 export default function Pengukuran() {
     // Terima props dari Controller
     const { auth, tahun, bidangs } = usePage().props;
     
     const [selectedRumpun, setSelectedRumpun] = useState(null);
+    const [activeTab, setActiveTab] = useState('parameter-ss-ikss');
     const daftarBidang = bidangs || []; 
+    const levelSakip = parseInt(auth.user?.id_sakip_level || 0, 10);
 
     return (
         <AuthenticatedLayout>
@@ -23,6 +26,20 @@ export default function Pengukuran() {
                 </Box>
                 
                 <Box sx={{ p: 3 }}>
+                    <Tabs
+                        value={activeTab}
+                        onChange={(_, value) => setActiveTab(value)}
+                        variant="scrollable"
+                        scrollButtons="auto"
+                        sx={{ mb: 3, borderBottom: '1px solid #e0e0e0' }}
+                    >
+                        <Tab label="Parameter SS / IKSS" value="parameter-ss-ikss" />
+                        <Tab label="Pengukuran Indikator Bidang" value="indikator-bidang" />
+                    </Tabs>
+
+                    {activeTab === 'parameter-ss-ikss' ? (
+                        <IkssParameterTab tahun={tahun} levelSakip={levelSakip} />
+                    ) : (
                     <Grid container spacing={3}>
                         {/* Kolom Daftar Bidang (Kiri) */}
                         <Grid item xs={12} md={3}>
@@ -85,6 +102,7 @@ export default function Pengukuran() {
                             </Card>
                         </Grid>
                     </Grid>
+                    )}
                 </Box>
             </Paper>
         </AuthenticatedLayout>

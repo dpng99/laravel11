@@ -32,6 +32,9 @@ use App\Http\Controllers\DownloaderFile;
 use App\Http\Controllers\GoogleDriveController;
 use App\Http\Controllers\SystemCheckController;
 use App\Http\Controllers\BusinessIntelligenceController;
+use App\Http\Controllers\SpipController;
+use App\Http\Controllers\AdminSpipController;
+use App\Http\Controllers\IkssParameterController;
 use App\Service\GoogleService;
 /*
 |--------------------------------------------------------------------------
@@ -68,6 +71,20 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/admin/dashboard-analitik', [DashboardAnalytic::class, 'index'])->name('admin.dashboard-analytic');
     Route::get('/admin/business-intelligence', [BusinessIntelligenceController::class, 'index'])->name('admin.business-intelligence');
+    Route::get('/spip', [SpipController::class, 'index'])->name('spip.index');
+    Route::get('/spip/session', [SpipController::class, 'session'])->name('spip.session');
+    Route::get('/spip/sub-unsur', [SpipController::class, 'subUnsur'])->name('spip.sub-unsur');
+    Route::get('/spip/detail', [SpipController::class, 'detail'])->name('spip.detail');
+    Route::get('/spip/klusters', [SpipController::class, 'klusters'])->name('spip.klusters');
+    Route::post('/spip/kertas-kerja', [SpipController::class, 'store'])->name('spip.kertas-kerja.store');
+    Route::post('/spip/status', [SpipController::class, 'updateStatus'])->name('spip.status');
+    Route::get('/spip/download', [SpipController::class, 'download'])->name('spip.download');
+    Route::get('/admin/spip', [AdminSpipController::class, 'index'])->name('admin.spip');
+    Route::get('/admin/spip/dashboard', [AdminSpipController::class, 'dashboard'])->name('admin.spip.dashboard');
+    Route::get('/admin/spip/intip/{userId}', [AdminSpipController::class, 'intip'])->name('admin.spip.intip');
+    Route::post('/admin/spip/approve/{userId}', [AdminSpipController::class, 'approve'])->name('admin.spip.approve');
+    Route::post('/admin/spip/reset-status/{userId}', [AdminSpipController::class, 'resetStatus'])->name('admin.spip.reset-status');
+    Route::get('/admin/spip/download', [AdminSpipController::class, 'download'])->name('admin.spip.download');
     Route::controller(KepController::class)->group(function () {
         Route::get('/kep', 'index')->name('kep');
         Route::post('kep', 'store')->name('kep.store');
@@ -112,8 +129,18 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/get-subindikator/{rumpun}', 'getSubIndikator');
         Route::get('/pelaporan/subindikator/{rumpun}', 'getSubIndikator2');
         Route::post('/pelaporan/simpan-keterangan', 'simpanKeterangan')->name('pelaporan.simpan_keterangan');
+        Route::post('/pelaporan/template-lkjip/export-word', 'exportLkjipTemplate')->name('pelaporan.template-lkjip.export-word');
         Route::post('/pelaporan/update/{type}/{id}', 'updateFile')->name('pelaporan.update');
         Route::delete('/pelaporan/delete/{type}/{id}', 'deleteFile')->name('pelaporan.delete');
+    });
+    Route::controller(IkssParameterController::class)->prefix('pelaporan/ikss-parameters')->group(function () {
+        Route::get('/catalog', 'catalog')->name('pelaporan.ikss-parameters.catalog');
+        Route::get('/values', 'values')->name('pelaporan.ikss-parameters.values');
+        Route::post('/values', 'store')->name('pelaporan.ikss-parameters.store');
+        Route::post('/recalculate', 'recalculate')->name('pelaporan.ikss-parameters.recalculate');
+        Route::get('/summary', 'summary')->name('pelaporan.ikss-parameters.summary');
+        Route::get('/report-data', 'reportData')->name('pelaporan.ikss-parameters.report-data');
+        Route::post('/definitions', 'saveDefinition')->name('pelaporan.ikss-parameters.definitions.store');
     });
 
     // === Evaluasi ===
