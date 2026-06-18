@@ -8,11 +8,9 @@ use App\Http\Controllers\DashboardAnalytic;
 use App\Http\Controllers\KepController;
 use App\Http\Controllers\SakipvalidasiController;
 use App\Http\Controllers\SakipwilController;
-use App\Http\Controllers\EvaluasiController;
 use App\Http\Controllers\PelaporanController;
 use App\Http\Controllers\PerencanaanController;
 use App\Http\Controllers\PengukuranController;
-use App\Http\Controllers\KepatuhanController;
 use App\Http\Controllers\ChatsupportController;
 use App\Http\Controllers\PengumumanController;
 use App\Http\Controllers\AturanController;
@@ -21,21 +19,17 @@ use App\Http\Controllers\FaqController;
 use App\Http\Controllers\KeloladataController;
 use App\Http\Controllers\UbahpasswordController;
 use App\Http\Controllers\MonitoringController;
-use App\Http\Controllers\DataLke;
 use App\Http\Controllers\EvaluasiControllerNew;
 use App\Http\Controllers\KriteriaController;
-use App\Http\Controllers\Indikator2025Controller;
 use App\Http\Controllers\LkeWas;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Redirect;
 use App\Http\Controllers\DownloaderFile;
-use App\Http\Controllers\GoogleDriveController;
 use App\Http\Controllers\SystemCheckController;
 use App\Http\Controllers\BusinessIntelligenceController;
 use App\Http\Controllers\SpipController;
 use App\Http\Controllers\AdminSpipController;
 use App\Http\Controllers\IkssParameterController;
-use App\Service\GoogleService;
+use App\Http\Controllers\PengukuranIkssController;
 /*
 |--------------------------------------------------------------------------
 | Rute Publik (Tidak Perlu Login)
@@ -118,6 +112,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/pengukuran/update-bulanan', 'updateBulanan')->name('pengukuran.updateBulanan');
         Route::get('/get-subindikator-by-id/{id}', 'getIndikatorNama');
     });
+
+
 
     // === Pelaporan ===
     Route::controller(PelaporanController::class)->group(function () {
@@ -269,69 +265,5 @@ Route::middleware(['auth'])->group(function () {
     // === Indikator 2025 (Dikomentari sesuai file asli) ===
     // Route::get('/indikator2025', [Indikator2025Controller::class, 'index'])->name('indikator2025.index');
     // Route::post('/pengukuran2025/store', [Indikator2025Controller::class, 'store'])->name('pengukuran2025.store');
-
-
-Route::get('/upload-drive', [GoogleDriveController::class, 'upload']);
-
-Route::get('/cek-gdrive', function () {
-    $log = [];
-    $log[] = "🔍 MEMULAI DIAGNOSTIK GOOGLE DRIVE...";
-
-    try {
-        // TAHAP 1: Cek Konfigurasi
-        $log[] = "⏳ 1. Mengecek konfigurasi di .env & config...";
-        if (!config('google.refresh_token') || !config('filesystems.disks.google.folder_id')) {
-            throw new \Exception("Kredensial (Refresh Token) atau Folder ID belum lengkap!");
-        }
-        $log[] = "✅ Tahap 1 Lulus: Konfigurasi aman.";
-
-        // TAHAP 2: Cek Mesin GoogleService
-        $log[] = "⏳ 2. Mengetes mesin GoogleService (Meminta Token Segar)...";
-       $client = app(\App\Services\GoogleService::class)->getClient();
-        $token = $client->fetchAccessTokenWithRefreshToken();
-        if (isset($token['error'])) {
-            throw new \Exception("Token Error: " . ($token['error_description'] ?? $token['error']));
-        }
-        $log[] = "✅ Tahap 2 Lulus: Berhasil terhubung ke Google API.";
-
-        // TAHAP 3: Cek Akses Baca (Read)
-        $log[] = "⏳ 3. Mengetes akses baca (Melihat isi folder)...";
-        $files = \Illuminate\Support\Facades\Storage::disk('google')->files('/');
-        $log[] = "✅ Tahap 3 Lulus: Berhasil membaca folder (Ditemukan " . count($files) . " file).";
-
-        // TAHAP 4: Cek Akses Tulis (Write)
-        $log[] = "⏳ 4. Mengetes akses tulis (Mengupload file percobaan)...";
-        $testFileName = 'test_koneksi_' . time() . '.txt';
-        $upload = \Illuminate\Support\Facades\Storage::disk('google')->put($testFileName, 'Ini adalah file uji coba diagnostik otomatis.');
-        if (!$upload) {
-            throw new \Exception("Gagal mengupload file ke Google Drive.");
-        }
-        $log[] = "✅ Tahap 4 Lulus: Berhasil mengupload file '$testFileName'.";
-
-        // TAHAP 5: Cek Akses Hapus (Delete)
-        $log[] = "⏳ 5. Mengetes akses hapus (Membersihkan file percobaan)...";
-        $delete = \Illuminate\Support\Facades\Storage::disk('google')->delete($testFileName);
-        if (!$delete) {
-            throw new \Exception("Berhasil upload, tapi gagal menghapus file. Cek permission folder.");
-        }
-        $log[] = "✅ Tahap 5 Lulus: Berhasil menghapus file percobaan.";
-
-        $log[] = "KESIMPULAN: jalan";
-
-        return response()->json([
-            'status' => 'jalan',
-            'catatan_sistem' => $log
-        ], 200, [], JSON_PRETTY_PRINT);
-
-    } catch (\Exception $e) {
-        $log[] = "ERROR : " . $e->getMessage();
-        $log[] = "KESIMPULAN: Sistem Google Drive mengalami kendala. Silakan cek pesan error di atas.";
-        
-        return response()->json([
-            'status' => 'ADA_MASALAH',
-            'catatan_sistem' => $log
-        ], 500, [], JSON_PRETTY_PRINT);
-    }
-});
 
 });

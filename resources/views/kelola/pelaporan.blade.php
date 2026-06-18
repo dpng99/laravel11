@@ -627,7 +627,6 @@
             // Ketika ganti triwulan
             $('#triwulan').on('change', function() {
                 let triwulan = $(this).val();
-                console.log('Triwulan ganti:', triwulan, 'Rumpun:', selectedRumpun);
                 if (selectedRumpun) {
                     loadSubIndikator(selectedRumpun, triwulan);
                 }
@@ -643,7 +642,6 @@
 
             $(document).on('click', '.btn-simpan-faktor', function() {
                 const indikatorId = $(this).data('indikator-id');
-                // console.log('Indikator ID:', indikatorId); // Pastikan indikatorId tidak undefined
 
                 const faktor = $(`.faktor-input[data-indikator-id='${indikatorId}']`).val();
                 const langkah = $(`.langkah-input[data-indikator-id='${indikatorId}']`).val();
@@ -656,9 +654,6 @@
                 }
 
                 btn.prop('disabled', true).text('Menyimpan...');
-
-                // console.log('ID:', indikatorId, 'Faktor:', faktor, 'Langkah:', langkah, 'Triwulan:',
-                //     triwulan);
 
                 $.ajax({
                     url: '/pelaporan/simpan-keterangan',
@@ -677,7 +672,7 @@
                     },
 
                     error: function(err) {
-                        console.log(err);
+                        console.error(err);
                         if (err.status === 404 && err.responseJSON?.message) {
                             showNotifModal(err.responseJSON.message ??
                                 'Terjadi kesalahan saat menyimpan data.', 'Peringatan');
