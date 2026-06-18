@@ -14,6 +14,18 @@ class lke_buktidukung extends Model
     protected $fillable = [
         'id',
         'dokumen',
+        'format_nama_file',
+        'keterangan',
+        'ada_di_sistem',
+        'tabel_sumber',
+        'tahun',
     ];
-    
+
+    protected function casts(): array
+    {
+        return [
+            'ada_di_sistem' => 'boolean',
+            'tahun' => 'integer',
+        ];
+    }
 }

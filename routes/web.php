@@ -140,7 +140,6 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/recalculate', 'recalculate')->name('pelaporan.ikss-parameters.recalculate');
         Route::get('/summary', 'summary')->name('pelaporan.ikss-parameters.summary');
         Route::get('/report-data', 'reportData')->name('pelaporan.ikss-parameters.report-data');
-        Route::post('/definitions', 'saveDefinition')->name('pelaporan.ikss-parameters.definitions.store');
     });
 
     // === Evaluasi ===
@@ -199,6 +198,18 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/keloladata/pohon/indikator-saspro', 'pohonIndikatorSasproStore')->name('pohon.indikator-saspro.store');
         Route::post('/keloladata/pohon/indikator-saspro/{id}', 'pohonIndikatorSasproUpdate')->name('pohon.indikator-saspro.update');
         Route::delete('/keloladata/pohon/indikator-saspro/{id}', 'pohonIndikatorSasproDestroy')->name('pohon.indikator-saspro.destroy');
+        Route::post('/keloladata/ikss/groups', 'ikssGroupStore')->name('keloladata.ikss.groups.store');
+        Route::post('/keloladata/ikss/groups/{id}', 'ikssGroupUpdate')->name('keloladata.ikss.groups.update');
+        Route::delete('/keloladata/ikss/groups/{id}', 'ikssGroupDestroy')->name('keloladata.ikss.groups.destroy');
+        Route::post('/keloladata/ikss/parameters', 'ikssParameterStore')->name('keloladata.ikss.parameters.store');
+        Route::post('/keloladata/ikss/parameters/{id}', 'ikssParameterUpdate')->name('keloladata.ikss.parameters.update');
+        Route::delete('/keloladata/ikss/parameters/{id}', 'ikssParameterDestroy')->name('keloladata.ikss.parameters.destroy');
+        Route::get('/keloladata/ikss/export', 'ikssExport')->name('keloladata.ikss.export');
+        Route::post('/keloladata/ikss/import', 'ikssImport')->name('keloladata.ikss.import');
+        Route::post('/keloladata/lke/copy-year', 'lkeCopyYear')->name('keloladata.lke.copy-year');
+        Route::post('/keloladata/lke/{type}', 'lkeStore')->name('keloladata.lke.store');
+        Route::post('/keloladata/lke/{type}/{id}', 'lkeUpdate')->name('keloladata.lke.update');
+        Route::delete('/keloladata/lke/{type}/{id}', 'lkeDestroy')->name('keloladata.lke.destroy');
     });
     // Halaman Admin Download ZIP
     Route::get('/admin/download-dokumen', [DownloaderFile::class, 'index'])

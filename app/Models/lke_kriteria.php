@@ -9,6 +9,7 @@ class lke_kriteria extends Model
 {
     use HasFactory;
     protected $table = 'lke_kriteria';
+    protected $guarded = [];
   
  public function buktiDukungs()
     {
@@ -20,7 +21,7 @@ class lke_kriteria extends Model
             'buktidukung_id', 
             'kode', 
             'id'
-        );
+        )->withPivot('tahun');
     }
     
     public function subKomponen()

@@ -8,6 +8,8 @@ import BidangTab from '@/Components/KelolaData/BidangTab';
 import SasproTab from '@/Components/KelolaData/SasproTab';
 import IndikatorTab from '@/Components/KelolaData/IndikatorTab';
 import SastraSasproTab from '@/Components/KelolaData/SastraSasproTab';
+import IkssMasterTab from '@/Components/KelolaData/IkssMasterTab';
+import LkeMasterTab from '@/Components/KelolaData/LkeMasterTab';
 
 function TabPanel(props) {
     const { children, value, index, ...other } = props;
@@ -23,6 +25,8 @@ const tabIndexes = {
     saspro: 1,
     indikator: 2,
     'sastra-saspro': 3,
+    ikss: 4,
+    lke: 5,
 };
 
 export default function KelolaData({
@@ -32,6 +36,8 @@ export default function KelolaData({
     bidangall,
     sasproAll,
     masterDataTabs,
+    ikssMasterData,
+    lkeMasterData,
     lingkupOptions = [],
     perPageOptions,
     canManagePohonKinerja,
@@ -94,6 +100,8 @@ export default function KelolaData({
                                 <Tab label="Data Saspro" />
                                 <Tab label="Data Indikator" />
                                 <Tab label="Sastra, Saspro & Indikator" />
+                                <Tab label="IKSS & Parameter" />
+                                <Tab label="Master LKE" />
                             </Tabs>
                         </Paper>
 
@@ -130,6 +138,14 @@ export default function KelolaData({
                                 canManage={canManagePohonKinerja}
                                 filters={filters}
                             />
+                        </TabPanel>
+
+                        <TabPanel value={activeTab} index={4}>
+                            <IkssMasterTab data={ikssMasterData} />
+                        </TabPanel>
+
+                        <TabPanel value={activeTab} index={5}>
+                            <LkeMasterTab data={lkeMasterData} />
                         </TabPanel>
 
                     </CardContent>
