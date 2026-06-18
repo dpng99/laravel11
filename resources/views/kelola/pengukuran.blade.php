@@ -145,7 +145,6 @@
         //         }
 
         //         // Sekarang labelPenghitungan[0] dan labelPenghitungan[1] adalah label yang bisa kamu tampilkan
-        //         console.log("Label:", labelPenghitungan[0], labelPenghitungan[1]);
 
         //         // Gunakan label ini untuk menampilkan di header tabel atau placeholder input
         //         // Tapi name="ditangani" dan name="diselesaikan" tetap

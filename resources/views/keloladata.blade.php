@@ -946,7 +946,6 @@
                 let indikatorPenghitungan = this.getAttribute("data-penghitungan");
                 let tahun1 = this.getAttribute("data-tahun1");
                 let tren = this.getAttribute("data-tren");
-                console.log(tahun1);
                 // Isi form modal dengan data yang diambil dari tombol edit
                 document.getElementById("indikator_id").value = indikatorId;
                 // document.getElementById("edit_link").value = link;
@@ -1112,9 +1111,6 @@
             // Masukkan nilai rumpun ke input hidden
             rumpunHidden.value = rumpunValue || '';
 
-            // Debugging (cek di console)
-            console.log("Bidang Dipilih:", selectedOption.textContent);
-            console.log("Rumpun Ditemukan:", rumpunValue);
         });
     });
 </script>

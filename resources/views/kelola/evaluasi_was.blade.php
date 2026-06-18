@@ -210,9 +210,8 @@
                                     })
                                 })
                                 .then(res => res.json())
-                                .then(data => {
+                                .then(() => {
                                     alert("Verifikasi berhasil!");
-                                    console.log(data);
 
                                     // Hanya update baris terkait (tanpa menutup modal)
                                     vbtn.classList.remove("btn-success");

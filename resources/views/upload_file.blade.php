@@ -68,7 +68,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function loadFiles() {
     const raw = idBuktiSelect.value;
-    console.log('loadFiles raw id_bukti =>', raw);
     const idBukti = Number(raw); // safer parse
     if (!idBukti) {
       uploadedFilesDiv.innerHTML = "<em>Pilih bukti dukung untuk melihat file</em>";
@@ -79,7 +78,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // buat URL robust (hindari placeholder yang gagal diganti)
     const base = "{{ url('/upload/files') }}"; // -> /upload/files
     const url = base + '/' + encodeURIComponent(idBukti) + (tw ? '?tw=' + encodeURIComponent(tw) : '');
-    console.log('fetch URL ->', url);
 
     fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(res => {
@@ -87,7 +85,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return res.json();
       })
       .then(data => {
-        console.log('files response:', data);
         if (!data || data.length === 0) {
           uploadedFilesDiv.innerHTML = "<em>Belum ada file diunggah</em>";
           return;
@@ -95,7 +92,7 @@ document.addEventListener('DOMContentLoaded', function () {
         let html = "<table class='table table-sm table-bordered'><thead><tr><th>No</th><th>Nama File</th><th>Triwulan</th><th>Tanggal Upload</th></tr></thead><tbody>";
         data.forEach((f, i) => {
           const filename = f.id_filename || f.filename || f.original_name || 'file.pdf';
-          const satker = f.id_satker || f.id_satker;
+          const satker = f.id_satker;
           const link = "/uploads/repository/" + (satker || '') + "/" + filename;
           html += `<tr>
                     <td>${i+1}</td>
