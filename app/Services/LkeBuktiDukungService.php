@@ -9,6 +9,7 @@ use App\Models\{
     Dipa,
     Iku,
     LheAkip,
+    lke_buktidukung,
     lke_komponen,
     Lkjip,
     memo_datakinerja,
@@ -43,6 +44,40 @@ use Illuminate\Support\Facades\Schema;
 
 class LkeBuktiDukungService
 {
+    public function sourceTableOptions(): array
+    {
+        $labels = [
+            'sinori_sakip_renstra' => 'Renstra',
+            'sinori_sakip_renja' => 'Renja',
+            'sinori_sakip_renaksi' => 'Renaksi',
+            'sinori_sakip_rkakl' => 'RKA-KL',
+            'sinori_sakip_dipa' => 'DIPA',
+            'pk' => 'Perjanjian Kinerja',
+            'sinori_sakip_iku' => 'IKU',
+            'sinori_sakip_lakip' => 'LKjIP',
+            'lhe' => 'LHE AKIP',
+            'tl_lhe_akip' => 'Tindak Lanjut LHE AKIP',
+            'sinori_sakip_rastaff' => 'Rapat Staf',
+            'sinori_sakip_renaksieval' => 'Monev Renaksi',
+            'pokin_ranwal' => 'Pohon Kinerja Ranwal',
+        ];
+
+        return collect($this->sourceModelsByTable())
+            ->keys()
+            ->map(fn ($table) => ['value' => $table, 'label' => $labels[$table] ?? ucwords(str_replace('_', ' ', $table))])
+            ->values()
+            ->all();
+    }
+
+    public function sourceModelsByTable(): array
+    {
+        return collect($this->modelMapping())
+            ->values()
+            ->unique()
+            ->mapWithKeys(fn ($modelClass) => [(new $modelClass())->getTable() => $modelClass])
+            ->all();
+    }
+
     public function modelMapping(): array
     {
         return [
@@ -74,11 +109,15 @@ class LkeBuktiDukungService
 
     public function grouped(string $idSatker, $tahun)
     {
+        $masterYear = $this->yearValue($tahun);
         $hierarki = lke_komponen::with([
-            'subKomponens' => fn ($query) => $query->orderBy('kode'),
-            'subKomponens.kriterias' => fn ($query) => $query->orderBy('kode'),
-            'subKomponens.kriterias.buktiDukungs' => fn ($query) => $query->orderBy('id'),
-        ])->orderBy('id')->get();
+            'subKomponens' => fn ($query) => $query->where('tahun', $masterYear)->orderBy('kode'),
+            'subKomponens.kriterias' => fn ($query) => $query->where('tahun', $masterYear)->orderBy('kode'),
+            'subKomponens.kriterias.buktiDukungs' => fn ($query) => $query
+                ->where('lke_buktidukung.tahun', $masterYear)
+                ->wherePivot('tahun', $masterYear)
+                ->orderBy('id'),
+        ])->where('tahun', $masterYear)->orderBy('id')->get();
 
         $uploaded = DB::table('bukti_dukung')
             ->where('id_satker', $idSatker)
@@ -105,7 +144,7 @@ class LkeBuktiDukungService
                         if ($uploadedEvidence) {
                             $status = 'Ada';
                             $fileLink = url("/file/view/{$idSatker}/" . rawurlencode($uploadedEvidence->link_bukti_dukung));
-                        } elseif (isset($this->modelMapping()[$kode])) {
+                        } elseif ($this->hasSystemSource($kode)) {
                             if (!array_key_exists($kode, $sourceCache)) {
                                 $sourceCache[$kode] = $this->sourceDocument($kode, $idSatker, $tahun);
                             }
@@ -118,6 +157,8 @@ class LkeBuktiDukungService
                         $buktiList[] = [
                             'kode_bukti' => $kode,
                             'nama_dokumen' => $buktiRef->dokumen,
+                            'format_nama_file' => $buktiRef->format_nama_file,
+                            'tabel_sumber' => $buktiRef->tabel_sumber,
                             'status' => $status,
                             'file_link' => $fileLink,
                             'periode' => $expectedPeriod,
@@ -144,12 +185,11 @@ class LkeBuktiDukungService
 
     public function sourceDocument(int $kode, string $idSatker, $tahun)
     {
-        $mapping = $this->modelMapping();
-        if (! isset($mapping[$kode])) {
+        $modelClass = $this->sourceModelClass($kode);
+        if (! $modelClass) {
             return null;
         }
 
-        $modelClass = $mapping[$kode];
         $model = new $modelClass();
         $table = $model->getTable();
         $query = $modelClass::query()->where('id_satker', $idSatker);
@@ -175,6 +215,25 @@ class LkeBuktiDukungService
         $this->applyLatestOrdering($query, $table);
 
         return $query->first();
+    }
+
+    public function sourceModelClass(int $kode): ?string
+    {
+        $evidence = lke_buktidukung::query()->find($kode);
+        if ($evidence) {
+            if ($evidence->ada_di_sistem && filled($evidence->tabel_sumber)) {
+                return $this->sourceModelsByTable()[$evidence->tabel_sumber] ?? null;
+            }
+
+            return null;
+        }
+
+        return $this->modelMapping()[$kode] ?? null;
+    }
+
+    public function hasSystemSource(int $kode): bool
+    {
+        return $this->sourceModelClass($kode) !== null;
     }
 
     public function filenameFromSource($row): ?string
@@ -240,6 +299,14 @@ class LkeBuktiDukungService
     private function filenameLooksLikeKode(?string $filename, int $kode): bool
     {
         $filename = strtolower((string) $filename);
+        $format = strtolower((string) lke_buktidukung::query()->whereKey($kode)->value('format_nama_file'));
+        if ($format !== '') {
+            $staticPrefix = trim((string) preg_split('/[{\[]/', $format, 2)[0], '_- .');
+            if ($staticPrefix !== '') {
+                return str_contains($filename, $staticPrefix);
+            }
+        }
+
         $prefixes = [
             1 => 'renstra', 2 => 'renja', 3 => 'renaksi', 4 => 'rkakl', 5 => 'dipa',
             6 => 'pk', 7 => 'pk', 8 => 'iku', 9 => 'iku', 10 => 'lkjip', 11 => 'lkjip',

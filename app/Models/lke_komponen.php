@@ -15,6 +15,7 @@ class lke_komponen extends Model
         'id',
         'no',
         'nama',
+        'tahun',
         
     ];
 

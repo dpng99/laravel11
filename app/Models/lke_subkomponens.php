@@ -16,6 +16,7 @@ class lke_subkomponens extends Model
         'komponen_id',
         'kode',
         'nama',
+        'tahun',
         'created_at',
         'updated_at',
     ];

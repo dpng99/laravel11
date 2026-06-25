@@ -473,6 +473,20 @@ class EvaluasiControllerNew extends Controller
             }
         }
 
+        $format = lke_buktidukung::query()->whereKey($kode)->value('format_nama_file');
+        if (filled($format)) {
+            $customName = strtr($format, [
+                '{prefix}' => $prefix,
+                '{tahun}' => (string) $tahun,
+                '{iterasi}' => (string) $iterasi,
+                '{triwulan}' => $tw,
+                '{satker}' => (string) $idSatker,
+                '{ext}' => (string) $extension,
+            ]);
+
+            return str_replace(['/', '\\'], '_', $customName);
+        }
+
         // 4. Rakit Nama Final (Contoh: ss_perencanaan_2025_0.pdf atau lkjip_2025_1_TW I.pdf)
         return "{$prefix}_{$tahun}_{$iterasi}{$tw}.{$extension}";
     }
