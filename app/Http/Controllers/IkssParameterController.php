@@ -144,10 +144,17 @@ class IkssParameterController extends Controller
     {
         $validated = $request->validate([
             'satker_id' => 'nullable|string|max:50',
+            'id_satker' => 'nullable|string|max:50',
+            'kode_satker' => 'nullable|string|max:50',
             'year' => 'nullable|integer|min:2000|max:2200',
             'quarter' => 'required|integer|min:1|max:4',
         ]);
-        $satkerId = (string) ($validated['satker_id'] ?? $access->currentSatkerId());
+        $satkerId = (string) (
+            $validated['satker_id']
+            ?? $validated['id_satker']
+            ?? $validated['kode_satker']
+            ?? $access->currentSatkerId()
+        );
         $access->abortUnlessCanAccessSatker($satkerId);
 
         return [$satkerId, (int) ($validated['year'] ?? $this->year($request)), (int) $validated['quarter']];

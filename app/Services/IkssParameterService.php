@@ -505,27 +505,45 @@ class IkssParameterService
         $cacheKey = "ikss-summary:{$satkerId}:{$year}:{$quarter}";
 
         return Cache::store('file')->remember($cacheKey, now()->addMinutes(10), function () use ($satkerId, $year, $quarter) {
-            $rows = DB::table('ikss_results as result')
-                ->leftJoin('indikator_sastra as ikss', 'ikss.kode_indikator', '=', 'result.ikss_id')
-                ->leftJoin('sakip_sastra_new as ss', 'ss.id_sastra', '=', 'ikss.kode_sastra')
+            $fallbackMetadata = $this->fallbackStrategicMetadata($year);
+            $query = DB::table('ikss_results as result')
                 ->where('result.satker_id', $satkerId)
                 ->where('result.year', $year)
-                ->where('result.quarter', $quarter)
-                ->orderBy('ss.urutan')
-                ->orderBy('ikss.urutan')
-                ->get([
-                    'result.ikss_id',
-                    'ikss.kode_sastra as ss_id',
-                    'ss.nama_sastra as ss_name',
-                    'ikss.nama_indikator as ikss_name',
-                    'result.target',
-                    'result.capaian',
-                    'result.achievement',
-                    'result.source_count',
-                    'result.completeness',
-                    'result.status',
-                    'result.calculated_at',
-                ]);
+                ->where('result.quarter', $quarter);
+            $rows = Schema::hasTable('indikator_sastra') && Schema::hasTable('sakip_sastra_new')
+                ? $query
+                    ->leftJoin('indikator_sastra as ikss', 'ikss.kode_indikator', '=', 'result.ikss_id')
+                    ->leftJoin('sakip_sastra_new as ss', 'ss.id_sastra', '=', 'ikss.kode_sastra')
+                    ->orderBy('ss.urutan')
+                    ->orderBy('ikss.urutan')
+                    ->get([
+                        'result.ikss_id',
+                        'ikss.kode_sastra as ss_id',
+                        'ss.nama_sastra as ss_name',
+                        'ikss.nama_indikator as ikss_name',
+                        'result.target',
+                        'result.capaian',
+                        'result.achievement',
+                        'result.source_count',
+                        'result.completeness',
+                        'result.status',
+                        'result.calculated_at',
+                    ])
+                : $query
+                    ->orderBy('result.ikss_id')
+                    ->get([
+                        'result.ikss_id',
+                        DB::raw('NULL as ss_id'),
+                        DB::raw('NULL as ss_name'),
+                        DB::raw('NULL as ikss_name'),
+                        'result.target',
+                        'result.capaian',
+                        'result.achievement',
+                        'result.source_count',
+                        'result.completeness',
+                        'result.status',
+                        'result.calculated_at',
+                    ]);
 
             return [
                 'satker_id' => $satkerId,
@@ -533,9 +551,9 @@ class IkssParameterService
                 'quarter' => $quarter,
                 'results' => $rows->map(fn ($row) => [
                     'ikss_id' => (string) $row->ikss_id,
-                    'ss_id' => (string) ($row->ss_id ?? ''),
-                    'ss_name' => (string) ($row->ss_name ?? $row->ss_id ?? ''),
-                    'ikss_name' => (string) ($row->ikss_name ?? $row->ikss_id),
+                    'ss_id' => (string) ($row->ss_id ?? $fallbackMetadata[(string) $row->ikss_id]['ss_id'] ?? ''),
+                    'ss_name' => (string) ($row->ss_name ?? $fallbackMetadata[(string) $row->ikss_id]['ss_name'] ?? $row->ss_id ?? ''),
+                    'ikss_name' => (string) ($row->ikss_name ?? $fallbackMetadata[(string) $row->ikss_id]['ikss_name'] ?? $row->ikss_id),
                     'target' => $row->target === null ? null : (float) $row->target,
                     'capaian' => $row->capaian === null ? null : (float) $row->capaian,
                     'achievement' => $row->achievement === null ? null : (float) $row->achievement,
@@ -596,8 +614,10 @@ class IkssParameterService
 
     private function strategicMetadata(int $year): array
     {
+        $fallback = $this->fallbackStrategicMetadata($year);
+
         if (! Schema::hasTable('indikator_sastra') || ! Schema::hasTable('sakip_sastra_new')) {
-            return [];
+            return $fallback;
         }
 
         $query = DB::table('indikator_sastra as ikss')
@@ -610,7 +630,7 @@ class IkssParameterService
             $this->applyMasterYearFilter($query, 'ss.tahun', $year);
         }
 
-        return $query
+        $master = $query
             ->get([
                 'ikss.kode_indikator',
                 'ikss.kode_sastra',
@@ -623,6 +643,48 @@ class IkssParameterService
                 'ikss_name' => (string) ($row->nama_indikator ?? $row->kode_indikator),
             ]])
             ->all();
+
+        return array_replace($fallback, $master);
+    }
+
+    private function fallbackStrategicMetadata(int $year): array
+    {
+        return IkssParameter::query()
+            ->where('is_active', true)
+            ->where('is_result', true)
+            ->where(fn ($query) => $query->whereNull('valid_from_year')->orWhere('valid_from_year', '<=', $year))
+            ->where(fn ($query) => $query->whereNull('valid_until_year')->orWhere('valid_until_year', '>=', $year))
+            ->orderBy('ikss_id')
+            ->orderBy('sort_order')
+            ->get(['ikss_id', 'name'])
+            ->mapWithKeys(function (IkssParameter $parameter) {
+                $ikssId = (string) $parameter->ikss_id;
+                preg_match('/(?:IKSS)?(\d+)[\.\-](\d+)/i', $ikssId, $match);
+                $ssId = isset($match[1]) ? 'SS'.$match[1] : '';
+
+                return [$ikssId => [
+                    'ss_id' => $ssId,
+                    'ss_name' => $this->fallbackSsName($ssId),
+                    'ikss_name' => $this->cleanStrategicName((string) $parameter->name),
+                ]];
+            })
+            ->all();
+    }
+
+    private function fallbackSsName(string $ssId): string
+    {
+        return match ($ssId) {
+            'SS1' => 'Terwujudnya kelembagaan hukum yang transparan dan adil',
+            'SS2' => 'Terwujudnya efektivitas penegakan hukum dan keadilan melalui transformasi sistem penuntutan',
+            'SS3' => 'Terwujudnya efektivitas pelaksanaan kewenangan Advocaat Generaal',
+            'SS4' => 'Terwujudnya tata kelola organisasi yang optimal, transparan, dan akuntabel',
+            default => $ssId,
+        };
+    }
+
+    private function cleanStrategicName(string $name): string
+    {
+        return trim((string) preg_replace('/^IKSS\s*\d+[\.\-]\d+\s*-\s*/i', '', $name));
     }
 
     private function applyMasterYearFilter($query, string $column, int $year): void
