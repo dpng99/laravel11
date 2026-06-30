@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class IkssParameterValue extends Model
+class IkssParameterResult extends Model
 {
     protected $guarded = [];
 
@@ -24,6 +24,7 @@ class IkssParameterValue extends Model
 
     public function items()
     {
-        return $this->hasMany(IkssParameterValueItem::class, 'parameter_value_id')->orderBy('sort_order');
+        return $this->hasMany(IkssParameterResultItem::class, 'parameter_result_id')->orderBy('sort_order');
     }
 }
+

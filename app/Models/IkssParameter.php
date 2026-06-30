@@ -41,8 +41,13 @@ class IkssParameter extends Model
         return $this->hasMany(IkssParameterDependency::class, 'parameter_id')->orderBy('sort_order');
     }
 
-    public function values()
+    public function inputs()
     {
-        return $this->hasMany(IkssParameterValue::class, 'parameter_id');
+        return $this->hasMany(IkssParameterInput::class, 'parameter_id');
+    }
+
+    public function results()
+    {
+        return $this->hasMany(IkssParameterResult::class, 'parameter_id');
     }
 }

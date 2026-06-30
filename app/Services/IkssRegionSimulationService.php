@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\IkssParameter;
-use App\Models\IkssParameterValue;
+use App\Models\IkssParameterInput;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -48,14 +48,14 @@ class IkssRegionSimulationService
             ->get();
         $parameterIds = $parameters->pluck('id')->all();
         $satkerIds = $satkers->pluck('id_satker')->map(fn ($id) => (string) $id)->all();
-        $existing = IkssParameterValue::query()
+        $existing = IkssParameterInput::query()
             ->with('items')
             ->whereIn('satker_id', $satkerIds)
             ->whereIn('parameter_id', $parameterIds)
             ->where('year', $year)
             ->where('quarter', $quarter)
             ->get()
-            ->keyBy(fn (IkssParameterValue $value) => $this->valueKey(
+            ->keyBy(fn (IkssParameterInput $value) => $this->valueKey(
                 (string) $value->satker_id,
                 (int) $value->parameter_id,
                 (int) $value->month
@@ -116,7 +116,7 @@ class IkssRegionSimulationService
 
         DB::transaction(function () use ($rows, $tableKeys, $replace, $year, $quarter, $now) {
             foreach (array_chunk($rows, 500) as $chunk) {
-                DB::table('ikss_parameter_values')->upsert(
+                DB::table('ikss_parameter_inputs')->upsert(
                     $chunk,
                     ['parameter_id', 'satker_id', 'year', 'quarter', 'month'],
                     [
@@ -141,13 +141,13 @@ class IkssRegionSimulationService
                 return;
             }
 
-            $tableValues = IkssParameterValue::query()
+            $tableValues = IkssParameterInput::query()
                 ->whereIn('parameter_id', collect($tableKeys)->pluck('parameter_id')->unique()->all())
                 ->whereIn('satker_id', collect($tableKeys)->pluck('satker_id')->unique()->all())
                 ->where('year', $year)
                 ->where('quarter', $quarter)
                 ->get()
-                ->filter(fn (IkssParameterValue $value) => isset($tableKeys[$this->valueKey(
+                ->filter(fn (IkssParameterInput $value) => isset($tableKeys[$this->valueKey(
                     (string) $value->satker_id,
                     (int) $value->parameter_id,
                     (int) $value->month
@@ -195,15 +195,15 @@ class IkssRegionSimulationService
             'region_full_entry_simulation'
         );
 
-        $filledKeys = IkssParameterValue::query()
+        $filledKeys = IkssParameterInput::query()
             ->with('items')
             ->whereIn('satker_id', $satkerIds)
             ->whereIn('parameter_id', $parameterIds)
             ->where('year', $year)
             ->where('quarter', $quarter)
             ->get()
-            ->filter(fn (IkssParameterValue $value) => $this->hasValue($value))
-            ->mapWithKeys(fn (IkssParameterValue $value) => [
+            ->filter(fn (IkssParameterInput $value) => $this->hasValue($value))
+            ->mapWithKeys(fn (IkssParameterInput $value) => [
                 $this->valueKey((string) $value->satker_id, (int) $value->parameter_id, (int) $value->month) => true,
             ]);
         $missing = collect(array_keys($expectedKeys))->reject(fn (string $key) => $filledKeys->has($key))->values();
@@ -283,7 +283,7 @@ class IkssRegionSimulationService
             : [0];
     }
 
-    private function hasValue(IkssParameterValue $value): bool
+    private function hasValue(IkssParameterInput $value): bool
     {
         return $value->value_decimal !== null
             || trim((string) $value->value_text) !== ''

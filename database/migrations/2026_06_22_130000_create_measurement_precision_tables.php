@@ -45,7 +45,7 @@ return new class extends Migration
             $table->timestamps();
             
             // Unique constraint
-            $table->unique(['level_code', 'satker_id', 'indikator_id', 'effective_date']);
+            $table->unique(['level_code', 'satker_id', 'indikator_id', 'effective_date'], 'mt_lc_sid_iid_ed_unique');
         });
 
         // 2. Tabel Metadata Indikator
@@ -118,7 +118,7 @@ return new class extends Migration
             $table->id();
             $table->string('framework_version', 20);
             $table->string('template_type', 50)->comment('lkjip-kejati, lkjip-kejari, etc');
-            $table->longBlob('template_file')->nullable();
+            $table->binary('template_file')->nullable();
             $table->string('template_hash', 64)->nullable();
             $table->text('change_notes')->nullable();
             
@@ -126,7 +126,7 @@ return new class extends Migration
             $table->timestamps();
             
             $table->foreign('framework_version')->references('version')->on('measurement_frameworks');
-            $table->index(['framework_version', 'template_type']);
+            $table->index(['framework_version', 'template_type'], 'mtv_fv_tt_index');
         });
 
         // 6. Tabel LKE Dokumen Mapping (Dynamic)
