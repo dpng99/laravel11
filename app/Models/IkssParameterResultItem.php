@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class IkssParameterValueItem extends Model
+class IkssParameterResultItem extends Model
 {
     protected $guarded = [];
 
@@ -15,8 +15,9 @@ class IkssParameterValueItem extends Model
         ];
     }
 
-    public function parameterValue()
+    public function parameterResult()
     {
-        return $this->belongsTo(IkssParameterValue::class, 'parameter_value_id');
+        return $this->belongsTo(IkssParameterResult::class, 'parameter_result_id');
     }
 }
+

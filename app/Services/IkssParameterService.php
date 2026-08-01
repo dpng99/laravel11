@@ -4,7 +4,8 @@ namespace App\Services;
 
 use App\Models\IkssCalculationRun;
 use App\Models\IkssParameter;
-use App\Models\IkssParameterValue;
+use App\Models\IkssParameterInput;
+use App\Models\IkssParameterResult;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -80,14 +81,23 @@ class IkssParameterService
         $parameters = $this->activeParameters($year)
             ->filter(fn (IkssParameter $parameter) => $this->appliesToLevel($parameter, (int) $satker->id_sakip_level))
             ->keyBy('id');
-        $values = IkssParameterValue::query()
+        $inputs = IkssParameterInput::query()
             ->with('items')
             ->where('satker_id', $satkerId)
             ->where('year', $year)
             ->where('quarter', $quarter)
             ->orderBy('month')
-            ->get()
-            ->groupBy('parameter_id');
+            ->get();
+            
+        $results = IkssParameterResult::query()
+            ->with('items')
+            ->where('satker_id', $satkerId)
+            ->where('year', $year)
+            ->where('quarter', $quarter)
+            ->orderBy('month')
+            ->get();
+            
+        $values = $inputs->concat($results)->groupBy('parameter_id');
 
         return $parameters
             ->map(fn (IkssParameter $parameter) => [
@@ -103,7 +113,7 @@ class IkssParameterService
                 'calculation_method' => $parameter->calculation_method,
                 'is_required' => $parameter->is_required,
                 'values' => collect($values->get($parameter->id, []))
-                    ->map(fn (IkssParameterValue $value) => [
+                    ->map(fn ($value) => [
                         'month' => $value->month,
                         'value_decimal' => $value->value_decimal === null ? null : (float) $value->value_decimal,
                         'value_text' => $value->value_text,
@@ -142,12 +152,12 @@ class IkssParameterService
         $clearEntries = [];
         $entryKeys = [];
 
-        $existingValues = IkssParameterValue::query()
+        $existingValues = IkssParameterInput::query()
             ->where('satker_id', $satkerId)
             ->where('year', $year)
             ->where('quarter', $quarter)
             ->get()
-            ->keyBy(fn (IkssParameterValue $value) => $value->parameter_id.'|'.$value->month);
+            ->keyBy(fn (IkssParameterInput $value) => $value->parameter_id.'|'.$value->month);
 
         foreach ($entries as $index => $entry) {
             $parameter = $parameters->get((int) $entry['parameter_id']);
@@ -239,7 +249,7 @@ class IkssParameterService
 
         DB::transaction(function () use ($rows, $itemEntries, $clearEntries, $satker, $satkerId, $year, $quarter) {
             foreach ($clearEntries as $clearEntry) {
-                IkssParameterValue::query()
+                IkssParameterInput::query()
                     ->where('parameter_id', $clearEntry['parameter_id'])
                     ->where('satker_id', $satkerId)
                     ->where('year', $year)
@@ -250,7 +260,7 @@ class IkssParameterService
             }
 
             if ($rows !== []) {
-                DB::table('ikss_parameter_values')->upsert(
+                DB::table('ikss_parameter_inputs')->upsert(
                     $rows,
                     ['parameter_id', 'satker_id', 'year', 'quarter', 'month'],
                     [
@@ -296,7 +306,7 @@ class IkssParameterService
                 $this->hydrateExternalValues($satkerId, $year, $quarter, $parameters);
                 $derivedIds = $parameters->where('calculation_method', '!=', 'input')->pluck('id')->all();
 
-                IkssParameterValue::query()
+                IkssParameterResult::query()
                     ->where('satker_id', $satkerId)
                     ->where('year', $year)
                     ->where('quarter', $quarter)
@@ -317,7 +327,7 @@ class IkssParameterService
                 $generatedRows = array_merge($monthlyRows, $derivedRows);
 
                 if ($generatedRows !== []) {
-                    DB::table('ikss_parameter_values')->upsert(
+                    DB::table('ikss_parameter_results')->upsert(
                         $generatedRows,
                         ['parameter_id', 'satker_id', 'year', 'quarter', 'month'],
                         [
@@ -388,7 +398,7 @@ class IkssParameterService
                     ->values();
                 $parameterIds = $parameters->pluck('id')->all();
 
-                IkssParameterValue::query()
+                IkssParameterResult::query()
                     ->where('satker_id', (string) $kejati->id_satker)
                     ->where('year', $year)
                     ->where('quarter', $quarter)
@@ -396,24 +406,33 @@ class IkssParameterService
                     ->whereIn('parameter_id', $parameterIds)
                     ->delete();
 
-                $childValues = IkssParameterValue::query()
+                $childInputs = IkssParameterInput::query()
                     ->with('items')
                     ->whereIn('satker_id', $children)
                     ->whereIn('parameter_id', $parameterIds)
                     ->where('year', $year)
                     ->where('quarter', $quarter)
                     ->where('month', 0)
-                    ->get()
-                    ->groupBy('parameter_id');
+                    ->get();
+                    
+                $childResults = IkssParameterResult::query()
+                    ->with('items')
+                    ->whereIn('satker_id', $children)
+                    ->whereIn('parameter_id', $parameterIds)
+                    ->where('year', $year)
+                    ->where('quarter', $quarter)
+                    ->where('month', 0)
+                    ->get();
+                    
+                $childValues = $childInputs->concat($childResults)->groupBy('parameter_id');
                 $now = now();
                 $rows = [];
 
                 foreach ($parameters as $parameter) {
-                    $sourceRows = collect($childValues->get($parameter->id, []))
-                        ->filter(fn (IkssParameterValue $value) => $value->value_decimal !== null);
+                    $values = collect($childValues->get($parameter->id, []))->filter(fn ($value) => $value->value_decimal !== null);
                     $value = $this->engine->calculate(
                         $parameter->aggregation_method,
-                        $sourceRows->map(fn (IkssParameterValue $row) => [
+                        $values->map(fn ($row) => [
                             'value' => $row->value_decimal,
                             'weight' => $row->source_count ?: 1,
                         ])->all(),
@@ -448,7 +467,7 @@ class IkssParameterService
                 }
 
                 if ($rows !== []) {
-                    DB::table('ikss_parameter_values')->upsert(
+                    DB::table('ikss_parameter_results')->upsert(
                         $rows,
                         ['parameter_id', 'satker_id', 'year', 'quarter', 'month'],
                         [
@@ -702,15 +721,25 @@ class IkssParameterService
 
     private function periodValueMap(string $satkerId, int $year, int $quarter, Collection $parameters): array
     {
-        $rows = IkssParameterValue::query()
+        $inputs = IkssParameterInput::query()
             ->with('items')
             ->where('satker_id', $satkerId)
             ->where('year', $year)
             ->where('quarter', $quarter)
             ->orderBy('month')
             ->orderBy('id')
-            ->get()
-            ->groupBy('parameter_id');
+            ->get();
+            
+        $results = IkssParameterResult::query()
+            ->with('items')
+            ->where('satker_id', $satkerId)
+            ->where('year', $year)
+            ->where('quarter', $quarter)
+            ->orderBy('month')
+            ->orderBy('id')
+            ->get();
+            
+        $rows = $inputs->concat($results)->groupBy('parameter_id');
         $map = [];
 
         foreach ($parameters as $parameter) {
@@ -1105,7 +1134,7 @@ class IkssParameterService
             return;
         }
 
-        IkssParameterValue::query()
+        IkssParameterResult::query()
             ->where('satker_id', $satkerId)
             ->where('year', $year)
             ->where('quarter', $quarter)
@@ -1168,7 +1197,7 @@ class IkssParameterService
         }
 
         if ($rows !== []) {
-            DB::table('ikss_parameter_values')->upsert(
+            DB::table('ikss_parameter_results')->upsert(
                 $rows,
                 ['parameter_id', 'satker_id', 'year', 'quarter', 'month'],
                 [
@@ -1196,7 +1225,7 @@ class IkssParameterService
             return;
         }
 
-        IkssParameterValue::query()
+        IkssParameterResult::query()
             ->where('satker_id', $satkerId)
             ->where('year', $year)
             ->where('quarter', $quarter)
@@ -1271,7 +1300,7 @@ class IkssParameterService
         }
 
         if ($rows !== []) {
-            DB::table('ikss_parameter_values')->insert($rows);
+            DB::table('ikss_parameter_results')->insert($rows);
         }
     }
 
@@ -1294,7 +1323,7 @@ class IkssParameterService
             ->map(fn ($key) => (int) explode('|', $key, 2)[0])
             ->unique()
             ->values();
-        $values = IkssParameterValue::query()
+        $values = IkssParameterInput::query()
             ->where('satker_id', $satkerId)
             ->where('year', $year)
             ->where('quarter', $quarter)
@@ -1317,7 +1346,7 @@ class IkssParameterService
             }
 
             $value->items()->insert(collect($items)->map(fn ($item, $index) => [
-                'parameter_value_id' => $value->id,
+                'parameter_input_id' => $value->id,
                 'item_key' => (string) $item['item_key'],
                 'item_label' => (string) $item['item_label'],
                 'value_decimal' => $item['value_decimal'] ?? null,
@@ -1343,7 +1372,7 @@ class IkssParameterService
             return;
         }
 
-        $regionalValues = IkssParameterValue::query()
+        $regionalValues = IkssParameterResult::query()
             ->where('satker_id', $kejatiSatkerId)
             ->where('year', $year)
             ->where('quarter', $quarter)
@@ -1362,7 +1391,7 @@ class IkssParameterService
 
             $regionalValue->items()->delete();
             $sourceItems = collect($childValues->get($parameter->id, []))
-                ->flatMap(fn (IkssParameterValue $value) => $value->items->map(fn ($item) => [
+                ->flatMap(fn ($value) => $value->items->map(fn ($item) => [
                     'item_key' => $item->item_key,
                     'item_label' => $item->item_label,
                     'group_key' => $this->regionalItemKey($item->item_label, $item->item_key),
@@ -1382,7 +1411,7 @@ class IkssParameterService
                 );
                 $first = $items->first();
                 $rows[] = [
-                    'parameter_value_id' => $regionalValue->id,
+                    'parameter_result_id' => $regionalValue->id,
                     'item_key' => (string) $itemKey,
                     'item_label' => (string) ($first['item_label'] ?? $itemKey),
                     'value_decimal' => $value,
@@ -1395,7 +1424,7 @@ class IkssParameterService
             }
 
             if ($rows !== []) {
-                DB::table('ikss_parameter_value_items')->insert($rows);
+                DB::table('ikss_parameter_result_items')->insert($rows);
             }
         }
     }

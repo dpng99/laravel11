@@ -4,7 +4,8 @@ namespace App\Services;
 
 use App\Models\IkssParameter;
 use App\Models\IkssParameterGroup;
-use App\Models\IkssParameterValue;
+use App\Models\IkssParameterInput;
+use App\Models\IkssParameterResult;
 use App\Models\LkjipTemplateBinding;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -24,14 +25,23 @@ class IkssReportDataService
             ->where(fn ($query) => $query->whereNull('valid_until_year')->orWhere('valid_until_year', '>=', $year))
             ->orderBy('sort_order')
             ->get();
-        $values = IkssParameterValue::query()
+        $inputs = IkssParameterInput::query()
             ->with('items')
             ->where('satker_id', $satkerId)
             ->where('year', $year)
             ->where('quarter', $quarter)
             ->where('month', 0)
-            ->get()
-            ->keyBy('parameter_id');
+            ->get();
+            
+        $results = IkssParameterResult::query()
+            ->with('items')
+            ->where('satker_id', $satkerId)
+            ->where('year', $year)
+            ->where('quarter', $quarter)
+            ->where('month', 0)
+            ->get();
+            
+        $values = $inputs->concat($results)->keyBy('parameter_id');
         $valuesByCode = $parameters
             ->mapWithKeys(fn (IkssParameter $parameter) => [$parameter->code => $values->get($parameter->id)]);
         $bindings = LkjipTemplateBinding::query()
@@ -279,14 +289,23 @@ class IkssReportDataService
             ->orderBy('id_sakip_level')
             ->orderBy('satkernama')
             ->get(['id_satker', 'satkernama']);
-        $regionalValues = IkssParameterValue::query()
+        $regionalInputs = IkssParameterInput::query()
             ->where('parameter_id', $parameter->id)
             ->whereIn('satker_id', $regionalSatkers->pluck('id_satker'))
             ->where('year', $year)
             ->where('quarter', $quarter)
             ->where('month', 0)
-            ->get()
-            ->keyBy('satker_id');
+            ->get();
+            
+        $regionalResults = IkssParameterResult::query()
+            ->where('parameter_id', $parameter->id)
+            ->whereIn('satker_id', $regionalSatkers->pluck('id_satker'))
+            ->where('year', $year)
+            ->where('quarter', $quarter)
+            ->where('month', 0)
+            ->get();
+            
+        $regionalValues = $regionalInputs->concat($regionalResults)->keyBy('satker_id');
         $rows = $regionalSatkers->values()->map(function ($regionalSatker, int $index) use ($regionalValues, $parameter) {
             $value = $regionalValues->get((string) $regionalSatker->id_satker);
 
